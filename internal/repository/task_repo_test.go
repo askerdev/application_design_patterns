@@ -4,6 +4,9 @@ package repository_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	"taskflow/internal/db"
 	"taskflow/internal/domain"
 	"taskflow/internal/repository"
@@ -50,8 +53,11 @@ func TestTaskRepoGetByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
 	}
-	if got.Content != "Test task" {
-		t.Errorf("expected content 'Test task', got %q", got.Content)
+
+	// Compare relevant fields, ignoring time fields (DB precision differs from in-memory)
+	opts := cmpopts.IgnoreFields(domain.Task{}, "CreatedAt", "UpdatedAt")
+	if diff := cmp.Diff(task, got, opts); diff != "" {
+		t.Errorf("GetByID mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -82,12 +88,14 @@ func TestTaskRepoUpdate(t *testing.T) {
 		t.Fatalf("Update: %v", err)
 	}
 
-	got, _ := repo.GetByID(task.ID)
-	if got.Content != "New" {
-		t.Errorf("expected content 'New', got %q", got.Content)
+	got, err := repo.GetByID(task.ID)
+	if err != nil {
+		t.Fatalf("GetByID after update: %v", err)
 	}
-	if got.Status != domain.TaskStatusDone {
-		t.Errorf("expected status DONE, got %s", got.Status)
+
+	opts := cmpopts.IgnoreFields(domain.Task{}, "CreatedAt", "UpdatedAt")
+	if diff := cmp.Diff(task, got, opts); diff != "" {
+		t.Errorf("after Update mismatch (-want +got):\n%s", diff)
 	}
 }
 
