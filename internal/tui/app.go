@@ -1,158 +1,205 @@
 package tui
 
 import (
-	"bufio"
 	"database/sql"
-	"fmt"
-	"os"
-	"strings"
+	"log"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"taskflow/internal/domain"
 	"taskflow/internal/repository"
 	"taskflow/internal/telegram"
 )
 
+// ── Screen enum ──────────────────────────────────────────────────────────────
+
+type screen int
+
 const (
-	colorReset   = "\033[0m"
-	colorBold    = "\033[1m"
-	colorGreen   = "\033[32m"
-	colorYellow  = "\033[33m"
-	colorCyan    = "\033[36m"
-	colorRed     = "\033[31m"
-	colorMagenta = "\033[35m"
+	screenHome screen = iota
+	screenTasks
+	screenProjects
+	screenNotes
+	screenReminders
+	screenTags
+	screenPomodoro
+	screenStats
 )
 
-type App struct {
-	db              *sql.DB
-	userRepo        *repository.UserRepo
-	taskRepo        *repository.TaskRepo
-	projectRepo     *repository.ProjectRepo
-	noteRepo        *repository.NoteRepo
-	reminderRepo    *repository.ReminderRepo
-	tagRepo         *repository.TagRepo
-	pomodoroRepo    *repository.PomodoroRepo
-	reminderService *telegram.ReminderService
-	currentUser     *domain.User
-	scanner         *bufio.Scanner
+// ── Navigation messages ───────────────────────────────────────────────────────
+
+type navigateMsg struct{ to screen }
+type backMsg struct{}
+
+// ── Shared repo bundle ────────────────────────────────────────────────────────
+
+type repos struct {
+	users     *repository.UserRepo
+	tasks     *repository.TaskRepo
+	projects  *repository.ProjectRepo
+	notes     *repository.NoteRepo
+	reminders *repository.ReminderRepo
+	tags      *repository.TagRepo
+	pomodoro  *repository.PomodoroRepo
 }
 
-func New(db *sql.DB, reminderService *telegram.ReminderService) *App {
-	return &App{
-		db:              db,
-		userRepo:        repository.NewUserRepo(db),
-		taskRepo:        repository.NewTaskRepo(db),
-		projectRepo:     repository.NewProjectRepo(db),
-		noteRepo:        repository.NewNoteRepo(db),
-		reminderRepo:    repository.NewReminderRepo(db),
-		tagRepo:         repository.NewTagRepo(db),
-		pomodoroRepo:    repository.NewPomodoroRepo(db),
-		reminderService: reminderService,
-		scanner:         bufio.NewScanner(os.Stdin),
+// ── Root model ────────────────────────────────────────────────────────────────
+
+type model struct {
+	screen    screen
+	home      homeModel
+	tasks     tasksModel
+	projects  projectsModel
+	notes     notesModel
+	reminders remindersModel
+	tags      tagsModel
+	pomodoro  pomodoroModel
+	stats     statsModel
+	width     int
+	height    int
+}
+
+func newModel(r *repos, user *domain.User, svc *telegram.ReminderService) model {
+	return model{
+		screen:    screenHome,
+		home:      newHomeModel(),
+		tasks:     newTasksModel(r, user),
+		projects:  newProjectsModel(r, user),
+		notes:     newNotesModel(r, user),
+		reminders: newRemindersModel(r, user, svc),
+		tags:      newTagsModel(r, user),
+		pomodoro:  newPomodoroModel(r, user),
+		stats:     newStatsModel(r, user),
 	}
 }
 
-func (a *App) Run() {
-	a.ensureUser()
-	a.mainLoop()
+func (m model) Init() tea.Cmd {
+	return m.home.Init()
 }
 
-func (a *App) ensureUser() {
-	u, err := a.userRepo.GetFirst()
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		m.home = m.home.setSize(msg.Width, msg.Height)
+		m.tasks = m.tasks.setSize(msg.Width, msg.Height)
+		m.projects = m.projects.setSize(msg.Width, msg.Height)
+		m.notes = m.notes.setSize(msg.Width, msg.Height)
+		m.reminders = m.reminders.setSize(msg.Width, msg.Height)
+		m.tags = m.tags.setSize(msg.Width, msg.Height)
+		m.pomodoro = m.pomodoro.setSize(msg.Width, msg.Height)
+		m.stats = m.stats.setSize(msg.Width, msg.Height)
+		return m, nil
+
+	case navigateMsg:
+		m.screen = msg.to
+		switch m.screen {
+		case screenTasks:
+			return m, m.tasks.reload()
+		case screenProjects:
+			return m, m.projects.reload()
+		case screenNotes:
+			return m, m.notes.reload()
+		case screenReminders:
+			return m, m.reminders.reload()
+		case screenTags:
+			return m, m.tags.reload()
+		case screenPomodoro:
+			return m, m.pomodoro.reload()
+		case screenStats:
+			return m, m.stats.reload()
+		}
+		return m, nil
+
+	case backMsg:
+		m.screen = screenHome
+		return m, nil
+
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	}
+
+	// Delegate to active screen
+	switch m.screen {
+	case screenHome:
+		updated, cmd := m.home.Update(msg)
+		m.home = updated
+		return m, cmd
+	case screenTasks:
+		updated, cmd := m.tasks.Update(msg)
+		m.tasks = updated
+		return m, cmd
+	case screenProjects:
+		updated, cmd := m.projects.Update(msg)
+		m.projects = updated
+		return m, cmd
+	case screenNotes:
+		updated, cmd := m.notes.Update(msg)
+		m.notes = updated
+		return m, cmd
+	case screenReminders:
+		updated, cmd := m.reminders.Update(msg)
+		m.reminders = updated
+		return m, cmd
+	case screenTags:
+		updated, cmd := m.tags.Update(msg)
+		m.tags = updated
+		return m, cmd
+	case screenPomodoro:
+		updated, cmd := m.pomodoro.Update(msg)
+		m.pomodoro = updated
+		return m, cmd
+	case screenStats:
+		updated, cmd := m.stats.Update(msg)
+		m.stats = updated
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m model) View() string {
+	switch m.screen {
+	case screenHome:
+		return m.home.View()
+	case screenTasks:
+		return m.tasks.View()
+	case screenProjects:
+		return m.projects.View()
+	case screenNotes:
+		return m.notes.View()
+	case screenReminders:
+		return m.reminders.View()
+	case screenTags:
+		return m.tags.View()
+	case screenPomodoro:
+		return m.pomodoro.View()
+	case screenStats:
+		return m.stats.View()
+	}
+	return ""
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
+// New returns a tea.Program. Call .Run() from main.
+func New(db *sql.DB, svc *telegram.ReminderService) *tea.Program {
+	r := &repos{
+		users:     repository.NewUserRepo(db),
+		tasks:     repository.NewTaskRepo(db),
+		projects:  repository.NewProjectRepo(db),
+		notes:     repository.NewNoteRepo(db),
+		reminders: repository.NewReminderRepo(db),
+		tags:      repository.NewTagRepo(db),
+		pomodoro:  repository.NewPomodoroRepo(db),
+	}
+	u, err := r.users.GetFirst()
 	if err != nil {
 		u = &domain.User{Username: "default"}
-		if err := a.userRepo.Create(u); err != nil {
-			fmt.Println("Error creating user:", err)
-			os.Exit(1)
-		}
-		fmt.Printf("%sWelcome to TaskFlow!%s\n\n", colorGreen, colorReset)
-	}
-	a.currentUser = u
-}
-
-func (a *App) mainLoop() {
-	for {
-		a.printMainMenu()
-		switch strings.TrimSpace(a.readLine("Choice: ")) {
-		case "1":
-			a.tasksMenu()
-		case "2":
-			a.projectsMenu()
-		case "3":
-			a.notesMenu()
-		case "4":
-			a.remindersMenu()
-		case "5":
-			a.tagsMenu()
-		case "6":
-			a.pomodoroMenu()
-		case "7":
-			a.statsMenu()
-		case "0":
-			fmt.Println("Bye!")
-			return
-		default:
-			fmt.Println("Unknown option.")
+		if err := r.users.Create(u); err != nil {
+			log.Fatal("create user:", err)
 		}
 	}
-}
-
-func (a *App) printMainMenu() {
-	fmt.Printf("\n%s=== TaskFlow ===%s  [%s]\n", colorBold, colorReset, a.currentUser.Username)
-	fmt.Println("  1. Tasks")
-	fmt.Println("  2. Projects")
-	fmt.Println("  3. Notes")
-	fmt.Println("  4. Reminders")
-	fmt.Println("  5. Tags")
-	fmt.Println("  6. Pomodoro")
-	fmt.Println("  7. Stats")
-	fmt.Println("  0. Exit")
-}
-
-// readLine prints prompt and reads one line from stdin
-func (a *App) readLine(prompt string) string {
-	fmt.Print(prompt)
-	a.scanner.Scan()
-	return a.scanner.Text()
-}
-
-// pickProject asks user to optionally pick a project; returns nil if skipped
-func (a *App) pickProject() *int64 {
-	projects, _ := a.projectRepo.GetAllByUser(a.currentUser.ID)
-	if len(projects) == 0 {
-		return nil
-	}
-	fmt.Println("  Projects:")
-	for _, p := range projects {
-		fmt.Printf("    %d. %s\n", p.ID, p.Name)
-	}
-	idStr := strings.TrimSpace(a.readLine("  Project ID (empty=none): "))
-	if idStr == "" {
-		return nil
-	}
-	var id int64
-	fmt.Sscanf(idStr, "%d", &id)
-	return &id
-}
-
-// pickTag asks user to optionally pick a tag; returns nil if skipped
-func (a *App) pickTag() *int64 {
-	tags, _ := a.tagRepo.GetAllByUser(a.currentUser.ID)
-	if len(tags) == 0 {
-		return nil
-	}
-	fmt.Println("  Tags:")
-	for _, t := range tags {
-		fmt.Printf("    %d. %s (%s)\n", t.ID, t.Name, t.Color)
-	}
-	idStr := strings.TrimSpace(a.readLine("  Tag ID (empty=none): "))
-	if idStr == "" {
-		return nil
-	}
-	var id int64
-	fmt.Sscanf(idStr, "%d", &id)
-	return &id
-}
-
-func clearScreen() {
-	fmt.Print("\033[H\033[2J")
+	return tea.NewProgram(newModel(r, u, svc), tea.WithAltScreen())
 }
