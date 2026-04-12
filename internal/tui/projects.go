@@ -72,6 +72,7 @@ func (m projectsModel) Update(msg tea.Msg) (projectsModel, tea.Cmd) {
 		if m.form.State == huh.StateAborted {
 			m.form = nil
 			m.status = "Cancelled."
+			return m, nil
 		}
 		return m, cmd
 	}

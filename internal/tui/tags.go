@@ -63,6 +63,7 @@ func (m tagsModel) Update(msg tea.Msg) (tagsModel, tea.Cmd) {
 		if m.form.State == huh.StateAborted {
 			m.form = nil
 			m.status = "Cancelled."
+			return m, nil
 		}
 		return m, cmd
 	}

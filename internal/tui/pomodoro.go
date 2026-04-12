@@ -86,6 +86,7 @@ func (m pomodoroModel) Update(msg tea.Msg) (pomodoroModel, tea.Cmd) {
 		if m.form.State == huh.StateAborted {
 			m.form = nil
 			m.status = "Cancelled."
+			return m, nil
 		}
 		return m, cmd
 	}
@@ -106,7 +107,13 @@ func (m pomodoroModel) Update(msg tea.Msg) (pomodoroModel, tea.Cmd) {
 			}
 			pct := 1.0 - float64(m.machine.RemainingTime)/float64(m.totalSecs)
 			var progCmd tea.Cmd
-			m.progress, progCmd = m.progress.Update(m.progress.SetPercent(pct))
+			{
+				updated, cmd := m.progress.Update(m.progress.SetPercent(pct))
+				progCmd = cmd
+				if p, ok := updated.(progress.Model); ok {
+					m.progress = p
+				}
+			}
 			return m, tea.Batch(progCmd, tickCmd())
 
 		case tea.KeyMsg:
