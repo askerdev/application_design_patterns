@@ -4,11 +4,18 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"taskflow/internal/config"
 	"taskflow/internal/db"
-	"taskflow/internal/repository"
+	"taskflow/internal/domain"
+	notesvc "taskflow/internal/note"
+	pomodorosvc "taskflow/internal/pomodoro"
+	projectsvc "taskflow/internal/project"
+	remindersvc "taskflow/internal/reminder"
+	sqliterepo "taskflow/internal/repository/sqlite"
+	statssvc "taskflow/internal/stats"
+	tasksvc "taskflow/internal/task"
+	tagsvc "taskflow/internal/tag"
 	"taskflow/internal/telegram"
 	"taskflow/internal/tui"
 )
@@ -23,23 +30,44 @@ func main() {
 		return
 	}
 
-	// Set up Observer pattern: ReminderService (subject) + TelegramNotifier (observer)
+	// ── Repositories ─────────────────────────────────────────────────────────
+	taskRepo := sqliterepo.NewTaskRepo(conn)
+	projectRepo := sqliterepo.NewProjectRepo(conn)
+	noteRepo := sqliterepo.NewNoteRepo(conn)
+	reminderRepo := sqliterepo.NewReminderRepo(conn)
+	tagRepo := sqliterepo.NewTagRepo(conn)
+	pomodoroRepo := sqliterepo.NewPomodoroRepo(conn)
+	userRepo := sqliterepo.NewUserRepo(conn)
+
+	// ── Telegram (Observer + Adapter patterns) ───────────────────────────────
 	tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
-	reminderRepo := repository.NewReminderRepo(conn)
-	reminderService := telegram.NewReminderService(reminderRepo)
-	reminderService.SetClient(tgClient)
-	reminderService.Register(telegram.NewTelegramNotifier(tgClient))
+	tgReminderSvc := telegram.NewReminderService(reminderRepo)
+	tgReminderSvc.SetClient(tgClient)
+	adapter := telegram.NewClientAdapter(tgClient)
+	tgReminderSvc.Register(telegram.NewTelegramNotifier(adapter))
 
-	// Background goroutine: check reminders every minute
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			reminderService.CheckAndNotify()
+	// ── Services ──────────────────────────────────────────────────────────────
+	svcs := tui.Services{
+		Tasks:     tasksvc.NewService(taskRepo),
+		Projects:  projectsvc.NewService(projectRepo),
+		Notes:     notesvc.NewService(noteRepo),
+		Reminders: remindersvc.NewService(reminderRepo, tgReminderSvc),
+		Tags:      tagsvc.NewService(tagRepo),
+		Pomodoro:  pomodorosvc.NewService(pomodoroRepo),
+		Stats:     statssvc.NewService(taskRepo, projectRepo, pomodoroRepo),
+	}
+
+	// ── Bootstrap user ────────────────────────────────────────────────────────
+	user, err := userRepo.GetFirst()
+	if err != nil {
+		user = &domain.User{Username: "default"}
+		if err := userRepo.Create(user); err != nil {
+			log.Fatal("create user:", err)
 		}
-	}()
+	}
 
-	if _, err := tui.New(conn, reminderService).Run(); err != nil {
+	// ── Run TUI ───────────────────────────────────────────────────────────────
+	if _, err := tui.New(svcs, user).Run(); err != nil {
 		log.Fatal(err)
 	}
 }

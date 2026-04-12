@@ -58,16 +58,17 @@ func (s *ReminderService) CheckAndNotify() error {
 	return nil
 }
 
-// TelegramNotifier — конкретный наблюдатель (паттерн Наблюдатель)
+// TelegramNotifier — конкретный наблюдатель (паттерн Наблюдатель).
+// Depends on the MessageSender interface (Adapter pattern) rather than *Client directly.
 type TelegramNotifier struct {
-	client *Client
+	sender MessageSender
 }
 
-func NewTelegramNotifier(client *Client) *TelegramNotifier {
-	return &TelegramNotifier{client: client}
+func NewTelegramNotifier(sender MessageSender) *TelegramNotifier {
+	return &TelegramNotifier{sender: sender}
 }
 
 func (n *TelegramNotifier) Notify(r *domain.Reminder) error {
 	text := "⏰ Reminder: " + r.Content
-	return n.client.SendMessage(text)
+	return n.sender.Send(text)
 }
