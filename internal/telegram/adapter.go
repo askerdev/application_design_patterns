@@ -4,6 +4,7 @@ package telegram
 // It decouples consumers (e.g. TelegramNotifier) from the concrete *Client.
 type MessageSender interface {
 	Send(message string) error
+	IsConfigured() bool
 }
 
 // ClientAdapter adapts *Client to the MessageSender interface.
@@ -19,4 +20,9 @@ func NewClientAdapter(c *Client) MessageSender {
 // Send delegates to the underlying client's SendMessage method.
 func (a *ClientAdapter) Send(message string) error {
 	return a.client.SendMessage(message)
+}
+
+// IsConfigured delegates to the underlying client's IsConfigured method.
+func (a *ClientAdapter) IsConfigured() bool {
+	return a.client.IsConfigured()
 }

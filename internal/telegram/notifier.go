@@ -14,21 +14,21 @@ type NotificationObserver interface {
 type ReminderService struct {
 	observers []NotificationObserver
 	repo      repository.ReminderRepository
-	client    *Client // kept for config check
+	sender    MessageSender
 }
 
-// IsConfigured returns true when the Telegram client is ready to send.
+// IsConfigured returns true when the sender is set and ready to send.
 func (s *ReminderService) IsConfigured() bool {
-	return s.client != nil && s.client.IsConfigured()
+	return s.sender != nil && s.sender.IsConfigured()
 }
 
 func NewReminderService(repo repository.ReminderRepository) *ReminderService {
 	return &ReminderService{repo: repo}
 }
 
-// SetClient stores the telegram client reference for config status checks.
-func (s *ReminderService) SetClient(c *Client) {
-	s.client = c
+// SetSender stores the MessageSender used for config status checks.
+func (s *ReminderService) SetSender(sender MessageSender) {
+	s.sender = sender
 }
 
 func (s *ReminderService) Register(o NotificationObserver) {

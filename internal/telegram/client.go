@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Client — адаптер для Telegram Bot HTTP API
+// Client — adaptee for the Adapter pattern — wraps the Telegram Bot HTTP API
 type Client struct {
 	token  string
 	chatID int64

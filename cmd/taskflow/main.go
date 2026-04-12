@@ -42,9 +42,9 @@ func main() {
 	// ── Telegram (Observer + Adapter patterns) ───────────────────────────────
 	tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
 	tgReminderSvc := telegram.NewReminderService(reminderRepo)
-	tgReminderSvc.SetClient(tgClient)
-	adapter := telegram.NewClientAdapter(tgClient)
-	tgReminderSvc.Register(telegram.NewTelegramNotifier(adapter))
+	tgSender := telegram.NewClientAdapter(tgClient)
+	tgReminderSvc.SetSender(tgSender)
+	tgReminderSvc.Register(telegram.NewTelegramNotifier(tgSender))
 
 	// ── Services ──────────────────────────────────────────────────────────────
 	svcs := tui.Services{
