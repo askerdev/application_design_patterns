@@ -20,21 +20,21 @@ func (i tagItem) FilterValue() string { return i.tag.Name }
 type tagsModel struct {
 	list   list.Model
 	form   *huh.Form
-	fName  string
-	fColor string
+	fName  *string
+	fColor *string
 
-	repos  *repos
+	svcs   Services
 	user   *domain.User
 	status string
 	width  int
 	height int
 }
 
-func newTagsModel(r *repos, user *domain.User) tagsModel {
+func newTagsModel(svcs Services, user *domain.User) tagsModel {
 	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
 	l.Title = "Tags"
 	l.Styles.Title = titleStyle
-	return tagsModel{repos: r, user: user, list: l}
+	return tagsModel{svcs: svcs, user: user, list: l}
 }
 
 func (m tagsModel) reload() tea.Cmd {
@@ -70,7 +70,7 @@ func (m tagsModel) Update(msg tea.Msg) (tagsModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tagsLoadMsg:
-		tags, _ := m.repos.tags.GetAllByUser(m.user.ID)
+		tags, _ := m.svcs.Tags.List(m.user.ID)
 		items := make([]list.Item, len(tags))
 		for i, t := range tags {
 			items[i] = tagItem{tag: t}
@@ -79,26 +79,29 @@ func (m tagsModel) Update(msg tea.Msg) (tagsModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "h", "backspace":
-			return m, func() tea.Msg { return backMsg{} }
-		case "a":
-			m.fName, m.fColor = "", "#ffffff"
-			m.form = huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().Title("Name").Value(&m.fName),
-					huh.NewInput().Title("Color hex").Placeholder("#ffffff").Value(&m.fColor),
-				),
-			)
-			return m, m.form.Init()
-		case "d":
-			if item, ok := m.list.SelectedItem().(tagItem); ok {
-				if err := m.repos.tags.Delete(item.tag.ID); err != nil {
-					m.status = errorStyle.Render("Error: " + err.Error())
-				} else {
-					m.status = "Deleted."
+		if m.list.FilterState() == list.Unfiltered {
+			switch msg.String() {
+			case "q":
+				return m, tea.Quit
+			case "a":
+				name, color := "", "#ffffff"
+				m.fName, m.fColor = &name, &color
+				m.form = huh.NewForm(
+					huh.NewGroup(
+						huh.NewInput().Title("Name").Value(m.fName),
+						huh.NewInput().Title("Color hex").Placeholder("#ffffff").Value(m.fColor),
+					),
+				)
+				return m, m.form.Init()
+			case "d":
+				if item, ok := m.list.SelectedItem().(tagItem); ok {
+					if err := m.svcs.Tags.Delete(item.tag.ID); err != nil {
+						m.status = errorStyle.Render("Error: " + err.Error())
+					} else {
+						m.status = "Deleted."
+					}
+					return m, m.reload()
 				}
-				return m, m.reload()
 			}
 		}
 	}
@@ -112,7 +115,7 @@ func (m tagsModel) View() string {
 	if m.form != nil {
 		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
 	}
-	help := statusBarStyle.Render("a add  d delete  esc back")
+	help := statusBarStyle.Render("a add  d delete  / filter  tab switch  q quit")
 	body := m.list.View()
 	if m.status != "" {
 		body += "\n" + m.status
@@ -130,13 +133,7 @@ func (m tagsModel) setSize(w, h int) tagsModel {
 }
 
 func (m *tagsModel) saveTag() error {
-	color := m.fColor
-	if color == "" {
-		color = "#ffffff"
-	}
-	return m.repos.tags.Create(&domain.Tag{
-		UserID: m.user.ID,
-		Name:   m.fName,
-		Color:  color,
-	})
+	factory := domain.NewEntityFactory()
+	t := factory.CreateTag(m.user.ID, *m.fName, *m.fColor)
+	return m.svcs.Tags.Create(t)
 }

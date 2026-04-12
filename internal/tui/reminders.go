@@ -10,10 +10,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"taskflow/internal/domain"
-	"taskflow/internal/telegram"
 )
 
-type reminderItem struct{ reminder *domain.Reminder }
+type reminderTickMsg time.Time
+
+func reminderTickCmd() tea.Cmd {
+	return tea.Tick(30*time.Second, func(t time.Time) tea.Msg { return reminderTickMsg(t) })
+}
+
+type reminderItem struct {
+	reminder    *domain.Reminder
+	projectName string
+	tagName     string
+}
 
 func (i reminderItem) Title() string {
 	due := ""
@@ -24,32 +33,37 @@ func (i reminderItem) Title() string {
 }
 
 func (i reminderItem) Description() string {
-	return i.reminder.ReminderTime.Format("2006-01-02 15:04")
+	s := i.reminder.ReminderTime.Format("2006-01-02 15:04") + " · " + i.projectName
+	if i.tagName != "" {
+		s += " #" + i.tagName
+	}
+	return s
 }
 
-func (i reminderItem) FilterValue() string { return i.reminder.Content }
+func (i reminderItem) FilterValue() string {
+	return i.reminder.Content + " " + i.projectName + " " + i.tagName
+}
 
 type remindersModel struct {
 	list     list.Model
 	form     *huh.Form
-	fContent string
-	fTime    string
-	fProject string
-	fTag     string
+	fContent *string
+	fTime    *string
+	fProject *string
+	fTag     *string
 
-	repos  *repos
+	svcs   Services
 	user   *domain.User
-	svc    *telegram.ReminderService
 	status string
 	width  int
 	height int
 }
 
-func newRemindersModel(r *repos, user *domain.User, svc *telegram.ReminderService) remindersModel {
+func newRemindersModel(svcs Services, user *domain.User) remindersModel {
 	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
 	l.Title = "Reminders"
 	l.Styles.Title = titleStyle
-	return remindersModel{repos: r, user: user, svc: svc, list: l}
+	return remindersModel{svcs: svcs, user: user, list: l}
 }
 
 func (m remindersModel) reload() tea.Cmd {
@@ -84,40 +98,66 @@ func (m remindersModel) Update(msg tea.Msg) (remindersModel, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case reminderTickMsg:
+		n := m.svcs.Reminders.Notifier()
+		if n != nil && n.IsConfigured() {
+			if err := n.CheckAndNotify(); err != nil {
+				m.status = errorStyle.Render("Reminder error: " + err.Error())
+			}
+			return m, tea.Batch(m.reload(), reminderTickCmd())
+		}
+		return m, reminderTickCmd()
+
 	case remindersLoadMsg:
-		reminders, _ := m.repos.reminders.GetAllByUser(m.user.ID)
+		reminders, _ := m.svcs.Reminders.List(m.user.ID)
+		projects, _ := m.svcs.Projects.List(m.user.ID)
+		projMap := make(map[int64]string, len(projects))
+		for _, p := range projects {
+			projMap[p.ID] = p.Name
+		}
+		tags, _ := m.svcs.Tags.List(m.user.ID)
+		tagMap := make(map[int64]string, len(tags))
+		for _, t := range tags {
+			tagMap[t.ID] = t.Name
+		}
 		items := make([]list.Item, len(reminders))
 		for i, r := range reminders {
-			items[i] = reminderItem{reminder: r}
+			proj, tag := "", ""
+			if r.ProjectID != nil {
+				proj = projMap[*r.ProjectID]
+			}
+			if r.TagID != nil {
+				tag = tagMap[*r.TagID]
+			}
+			items[i] = reminderItem{reminder: r, projectName: proj, tagName: tag}
 		}
 		m.list.SetItems(items)
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "h", "backspace":
-			return m, func() tea.Msg { return backMsg{} }
-		case "a":
-			m.fContent, m.fTime, m.fProject, m.fTag = "", "", "", ""
-			m.form = m.buildAddForm()
-			return m, m.form.Init()
-		case "s":
-			if m.svc != nil {
-				if err := m.svc.CheckAndNotify(); err != nil {
-					m.status = errorStyle.Render("Error: " + err.Error())
-				} else {
-					m.status = "Pending reminders processed."
+		if m.list.FilterState() == list.Unfiltered {
+			switch msg.String() {
+			case "q":
+				return m, tea.Quit
+			case "a":
+				projects, _ := m.svcs.Projects.List(m.user.ID)
+				if len(projects) == 0 {
+					m.status = errorStyle.Render("Create a project first.")
+					return m, nil
 				}
-				return m, m.reload()
-			}
-		case "d":
-			if item, ok := m.list.SelectedItem().(reminderItem); ok {
-				if err := m.repos.reminders.Delete(item.reminder.ID); err != nil {
-					m.status = errorStyle.Render("Error: " + err.Error())
-				} else {
-					m.status = "Deleted."
+				content, rtime, proj, tag := "", "", fmt.Sprintf("%d", projects[0].ID), ""
+				m.fContent, m.fTime, m.fProject, m.fTag = &content, &rtime, &proj, &tag
+				m.form = m.buildAddForm(projects)
+				return m, m.form.Init()
+			case "d":
+				if item, ok := m.list.SelectedItem().(reminderItem); ok {
+					if err := m.svcs.Reminders.Delete(item.reminder.ID); err != nil {
+						m.status = errorStyle.Render("Error: " + err.Error())
+					} else {
+						m.status = "Deleted."
+					}
+					return m, m.reload()
 				}
-				return m, m.reload()
 			}
 		}
 	}
@@ -131,11 +171,12 @@ func (m remindersModel) View() string {
 	if m.form != nil {
 		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
 	}
+	n := m.svcs.Reminders.Notifier()
 	tgStatus := "Telegram: NOT CONFIGURED"
-	if m.svc != nil && m.svc.IsConfigured() {
+	if n != nil && n.IsConfigured() {
 		tgStatus = "Telegram: configured"
 	}
-	help := statusBarStyle.Render("a add  s send pending  d delete  esc back")
+	help := statusBarStyle.Render("a add  d delete  / filter  tab switch  q quit")
 	body := tgStatus + "\n\n" + m.list.View()
 	if m.status != "" {
 		body += "\n" + m.status
@@ -152,47 +193,40 @@ func (m remindersModel) setSize(w, h int) remindersModel {
 	return m
 }
 
-func (m *remindersModel) buildAddForm() *huh.Form {
-	projects, _ := m.repos.projects.GetAllByUser(m.user.ID)
-	projOpts := []huh.Option[string]{huh.NewOption("(none)", "")}
-	for _, p := range projects {
-		projOpts = append(projOpts, huh.NewOption(p.Name, fmt.Sprintf("%d", p.ID)))
+func (m *remindersModel) buildAddForm(projects []*domain.Project) *huh.Form {
+	projOpts := make([]huh.Option[string], len(projects))
+	for i, p := range projects {
+		projOpts[i] = huh.NewOption(p.Name, fmt.Sprintf("%d", p.ID))
 	}
-	tags, _ := m.repos.tags.GetAllByUser(m.user.ID)
+	tags, _ := m.svcs.Tags.List(m.user.ID)
 	tagOpts := []huh.Option[string]{huh.NewOption("(none)", "")}
 	for _, t := range tags {
 		tagOpts = append(tagOpts, huh.NewOption(t.Name, fmt.Sprintf("%d", t.ID)))
 	}
 	return huh.NewForm(
 		huh.NewGroup(
-			huh.NewInput().Title("Content").Value(&m.fContent),
-			huh.NewInput().Title("Time (YYYY-MM-DD HH:MM)").Value(&m.fTime),
-			huh.NewSelect[string]().Title("Project (optional)").Options(projOpts...).Value(&m.fProject),
-			huh.NewSelect[string]().Title("Tag (optional)").Options(tagOpts...).Value(&m.fTag),
+			huh.NewInput().Title("Content").Value(m.fContent),
+			huh.NewInput().Title("Time (YYYY-MM-DD HH:MM)").Value(m.fTime),
+			huh.NewSelect[string]().Title("Project").Options(projOpts...).Value(m.fProject),
+			huh.NewSelect[string]().Title("Tag (optional)").Options(tagOpts...).Value(m.fTag),
 		),
 	)
 }
 
 func (m *remindersModel) saveReminder() error {
-	t, err := time.ParseInLocation("2006-01-02 15:04", m.fTime, time.Local)
+	t, err := time.ParseInLocation("2006-01-02 15:04", *m.fTime, time.Local)
 	if err != nil {
 		return fmt.Errorf("invalid time format — use YYYY-MM-DD HH:MM")
 	}
-	r := &domain.Reminder{
-		UserID:       m.user.ID,
-		Content:      m.fContent,
-		ReminderTime: t,
-		Status:       domain.ReminderStatusPending,
+	var projID int64
+	fmt.Sscanf(*m.fProject, "%d", &projID)
+	var tagID *int64
+	if *m.fTag != "" {
+		id := int64(0)
+		fmt.Sscanf(*m.fTag, "%d", &id)
+		tagID = &id
 	}
-	if m.fProject != "" {
-		var id int64
-		fmt.Sscanf(m.fProject, "%d", &id)
-		r.ProjectID = &id
-	}
-	if m.fTag != "" {
-		var id int64
-		fmt.Sscanf(m.fTag, "%d", &id)
-		r.TagID = &id
-	}
-	return m.repos.reminders.Create(r)
+	factory := domain.NewEntityFactory()
+	r := factory.CreateReminder(m.user.ID, *m.fContent, t, &projID, tagID)
+	return m.svcs.Reminders.Create(r)
 }
