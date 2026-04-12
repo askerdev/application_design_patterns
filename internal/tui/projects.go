@@ -23,22 +23,22 @@ type projectsModel struct {
 	list   list.Model
 	detail viewport.Model
 	form   *huh.Form
-	fName  string
-	fDesc  string
+	fName  *string
+	fDesc  *string
 
-	repos  *repos
+	svcs   Services
 	user   *domain.User
 	status string
 	width  int
 	height int
 }
 
-func newProjectsModel(r *repos, user *domain.User) projectsModel {
+func newProjectsModel(svcs Services, user *domain.User) projectsModel {
 	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
 	l.Title = "Projects"
 	l.Styles.Title = titleStyle
 	l.SetFilteringEnabled(false)
-	return projectsModel{repos: r, user: user, list: l, detail: viewport.New(0, 0)}
+	return projectsModel{svcs: svcs, user: user, list: l, detail: viewport.New(0, 0)}
 }
 
 func (m projectsModel) reload() tea.Cmd {
@@ -57,12 +57,8 @@ func (m projectsModel) Update(msg tea.Msg) (projectsModel, tea.Cmd) {
 		}
 		if m.form.State == huh.StateCompleted {
 			m.form = nil
-			if err := m.repos.projects.Create(&domain.Project{
-				UserID:      m.user.ID,
-				Name:        m.fName,
-				Description: m.fDesc,
-				Status:      domain.ProjectStatusActive,
-			}); err != nil {
+			f := domain.NewEntityFactory()
+			if err := m.svcs.Projects.Create(f.CreateProject(m.user.ID, *m.fName, *m.fDesc)); err != nil {
 				m.status = errorStyle.Render("Error: " + err.Error())
 			} else {
 				m.status = "Project created."
@@ -79,7 +75,7 @@ func (m projectsModel) Update(msg tea.Msg) (projectsModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case projectsLoadMsg:
-		projects, _ := m.repos.projects.GetAllByUser(m.user.ID)
+		projects, _ := m.svcs.Projects.List(m.user.ID)
 		items := make([]list.Item, len(projects))
 		for i, p := range projects {
 			items[i] = projectItem{project: p}
@@ -90,41 +86,33 @@ func (m projectsModel) Update(msg tea.Msg) (projectsModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "h", "backspace":
-			return m, func() tea.Msg { return backMsg{} }
+		case "q":
+			return m, tea.Quit
 		case "a":
-			m.fName, m.fDesc = "", ""
+			name, desc := "", ""
+			m.fName, m.fDesc = &name, &desc
 			m.form = huh.NewForm(
 				huh.NewGroup(
-					huh.NewInput().Title("Project name").Value(&m.fName),
-					huh.NewInput().Title("Description (optional)").Value(&m.fDesc),
+					huh.NewInput().Title("Project name").Value(m.fName),
+					huh.NewInput().Title("Description (optional)").Value(m.fDesc),
 				),
 			)
 			return m, m.form.Init()
 		case "d":
 			if item, ok := m.list.SelectedItem().(projectItem); ok {
-				if err := m.repos.projects.Delete(item.project.ID); err != nil {
+				if err := m.svcs.Projects.Delete(item.project.ID); err != nil {
 					m.status = errorStyle.Render("Error: " + err.Error())
 				} else {
 					m.status = "Deleted."
 				}
 				return m, m.reload()
 			}
-		case "j", "down":
-			var cmd tea.Cmd
-			m.list, cmd = m.list.Update(msg)
-			m.refreshDetail()
-			return m, cmd
-		case "k", "up":
-			var cmd tea.Cmd
-			m.list, cmd = m.list.Update(msg)
-			m.refreshDetail()
-			return m, cmd
 		}
 	}
 
 	var listCmd tea.Cmd
 	m.list, listCmd = m.list.Update(msg)
+	m.refreshDetail()
 	var vpCmd tea.Cmd
 	m.detail, vpCmd = m.detail.Update(msg)
 	return m, tea.Batch(listCmd, vpCmd)
@@ -144,7 +132,7 @@ func (m *projectsModel) refreshDetail() {
 		fmt.Fprintf(&sb, "\n%s\n", p.Description)
 	}
 
-	tasks, _ := m.repos.tasks.GetByProject(p.ID)
+	tasks, _ := m.svcs.Tasks.ListByProject(p.ID)
 	fmt.Fprintf(&sb, "\nTasks (%d):\n", len(tasks))
 	for _, t := range tasks {
 		overdue := ""
@@ -154,7 +142,7 @@ func (m *projectsModel) refreshDetail() {
 		fmt.Fprintf(&sb, "  [%s] %s%s\n", t.Status, t.Content, overdue)
 	}
 
-	sessions, _ := m.repos.pomodoro.GetCompletedByProject(p.ID)
+	sessions, _ := m.svcs.Pomodoro.ListCompletedByProject(p.ID)
 	fmt.Fprintf(&sb, "\nPomodoro sessions (%d):\n", len(sessions))
 	for _, s := range sessions {
 		start := ""
@@ -176,15 +164,15 @@ func (m projectsModel) View() string {
 	leftW := m.width / 3
 	rightW := m.width - leftW - 3
 
-	left := activePaneStyle.Width(leftW).Height(m.height - 4).Render(m.list.View())
-	right := inactivePaneStyle.Width(rightW).Height(m.height - 4).Render(m.detail.View())
+	left := activePaneStyle.Width(leftW).Height(m.height - 6).Render(m.list.View())
+	right := inactivePaneStyle.Width(rightW).Height(m.height - 6).Render(m.detail.View())
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
 	status := ""
 	if m.status != "" {
 		status = "\n" + m.status
 	}
-	help := statusBarStyle.Render("a add  d delete  j/k navigate  esc back")
+	help := statusBarStyle.Render("a add  d delete  j/k navigate  tab switch  q quit")
 	return lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.NewStyle().Padding(1, 1).Render(body+status),
 		help,

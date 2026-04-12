@@ -55,6 +55,17 @@ func (f *EntityFactory) CreateReminder(userID int64, content string, reminderTim
 	}
 }
 
+// CreateProject creates a new Project with ACTIVE status.
+func (f *EntityFactory) CreateProject(userID int64, name, description string) *Project {
+	return &Project{
+		UserID:      userID,
+		Name:        name,
+		Description: description,
+		Status:      ProjectStatusActive,
+		CreatedAt:   time.Now(),
+	}
+}
+
 // CreateTag creates a new Tag with the given parameters and sets default values.
 // The factory ensures consistent initialization across the application.
 func (f *EntityFactory) CreateTag(userID int64, name, color string) *Tag {

@@ -31,4 +31,14 @@ var (
 				BorderForeground(colorMuted)
 
 	overdueStyle = lipgloss.NewStyle().Foreground(colorOverdue).Bold(true)
+
+	activeTabStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("0")).
+			Background(colorPrimary).
+			Padding(0, 1)
+
+	inactiveTabStyle = lipgloss.NewStyle().
+				Foreground(colorMuted).
+				Padding(0, 1)
 )

@@ -9,19 +9,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"taskflow/internal/domain"
-	taskmath "taskflow/internal/math"
 )
 
 type statsModel struct {
 	viewport viewport.Model
-	repos    *repos
+	svcs     Services
 	user     *domain.User
 	width    int
 	height   int
 }
 
-func newStatsModel(r *repos, user *domain.User) statsModel {
-	return statsModel{repos: r, user: user, viewport: viewport.New(0, 0)}
+func newStatsModel(svcs Services, user *domain.User) statsModel {
+	return statsModel{svcs: svcs, user: user, viewport: viewport.New(0, 0)}
 }
 
 func (m statsModel) reload() tea.Cmd {
@@ -40,8 +39,8 @@ func (m statsModel) Update(msg tea.Msg) (statsModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "h", "backspace":
-			return m, func() tea.Msg { return backMsg{} }
+		case "q":
+			return m, tea.Quit
 		}
 	}
 
@@ -51,7 +50,7 @@ func (m statsModel) Update(msg tea.Msg) (statsModel, tea.Cmd) {
 }
 
 func (m statsModel) View() string {
-	help := statusBarStyle.Render("j/k scroll  esc back")
+	help := statusBarStyle.Render("j/k scroll  tab switch  q quit")
 	return lipgloss.JoinVertical(lipgloss.Left,
 		titleStyle.Padding(1, 2).Render("Stats"),
 		lipgloss.NewStyle().Padding(0, 2).Render(m.viewport.View()),
@@ -66,46 +65,24 @@ func (m statsModel) setSize(w, h int) statsModel {
 }
 
 func (m *statsModel) buildContent() string {
-	var sb strings.Builder
-
-	tasks, _ := m.repos.tasks.GetAllByUser(m.user.ID)
-	total, done, todo, inprog := 0, 0, 0, 0
-	for _, t := range tasks {
-		total++
-		switch t.Status {
-		case "DONE":
-			done++
-		case "TODO":
-			todo++
-		case "IN_PROGRESS":
-			inprog++
-		}
+	sum, err := m.svcs.Stats.Summarize(m.user.ID)
+	if err != nil {
+		return "Error loading stats: " + err.Error()
 	}
-	fmt.Fprintf(&sb, "Tasks: %d total  |  %d done  |  %d todo  |  %d in-progress\n\n", total, done, todo, inprog)
 
-	projects, _ := m.repos.projects.GetAllByUser(m.user.ID)
-	if len(projects) > 0 {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Tasks: %d total  |  %d done  |  %d todo  |  %d in-progress\n\n",
+		sum.Total, sum.Done, sum.Todo, sum.InProgress)
+
+	if len(sum.Projects) > 0 {
 		sb.WriteString("Project ETA:\n")
-		for _, p := range projects {
-			ptasks, _ := m.repos.tasks.GetByProject(p.ID)
-			remaining := 0
-			for _, t := range ptasks {
-				if t.Status != "DONE" {
-					remaining++
-				}
-			}
-			sessions, _ := m.repos.pomodoro.GetCompletedByProject(p.ID)
-			completed := make([]int, len(sessions))
-			for i := range completed {
-				completed[i] = 1
-			}
-			eta, err := taskmath.CalculateETA(sessions, completed, remaining)
-			if err != nil {
-				fmt.Fprintf(&sb, "  %s: %d remaining (no history)\n", p.Name, remaining)
+		for _, p := range sum.Projects {
+			if !p.HasETA {
+				fmt.Fprintf(&sb, "  %s: %d remaining (no history)\n", p.Name, p.Remaining)
 			} else {
-				hours := int(eta) / 60
-				mins := int(eta) % 60
-				fmt.Fprintf(&sb, "  %s: %d remaining — ETA ~%dh%dm\n", p.Name, remaining, hours, mins)
+				hours := int(p.ETAMins) / 60
+				mins := int(p.ETAMins) % 60
+				fmt.Fprintf(&sb, "  %s: %d remaining — ETA ~%dh%dm\n", p.Name, p.Remaining, hours, mins)
 			}
 		}
 	}
