@@ -64,6 +64,7 @@ func (r *ReminderRepo) GetPending() ([]*domain.Reminder, error) {
 }
 
 func (r *ReminderRepo) Update(rem *domain.Reminder) error {
+	rem.UpdatedAt = time.Now()
 	_, err := r.db.Exec(
 		`UPDATE reminders SET status=?, updated_at=? WHERE id=?`,
 		rem.Status, rem.UpdatedAt, rem.ID,
