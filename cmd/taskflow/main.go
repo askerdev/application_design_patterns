@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"taskflow/internal/config"
 	"taskflow/internal/db"
+	"taskflow/internal/repository"
+	"taskflow/internal/telegram"
 	"taskflow/internal/tui"
 )
 
@@ -19,6 +22,21 @@ func main() {
 		return
 	}
 
-	app := tui.New(conn)
+	// Set up Observer pattern: ReminderService (subject) + TelegramNotifier (observer)
+	tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
+	reminderRepo := repository.NewReminderRepo(conn)
+	reminderService := telegram.NewReminderService(reminderRepo)
+	reminderService.Register(telegram.NewTelegramNotifier(tgClient))
+
+	// Background goroutine: check reminders every minute
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			reminderService.CheckAndNotify()
+		}
+	}()
+
+	app := tui.New(conn, reminderService)
 	app.Run()
 }
