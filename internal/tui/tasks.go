@@ -4,92 +4,208 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
+
 	"taskflow/internal/domain"
 )
 
-func (a *App) tasksMenu() {
-	for {
-		fmt.Printf("\n%s-- Tasks --%s\n", colorCyan, colorReset)
-		tasks, _ := a.taskRepo.GetAllByUser(a.currentUser.ID)
-		if len(tasks) == 0 {
-			fmt.Println("  (no tasks)")
+type taskItem struct{ task *domain.Task }
+
+func (i taskItem) Title() string {
+	check := "[ ]"
+	if i.task.Status == domain.TaskStatusDone {
+		check = "[x]"
+	}
+	title := fmt.Sprintf("%s %s", check, i.task.Content)
+	if i.task.IsOverdue() {
+		title += overdueStyle.Render(" OVERDUE")
+	}
+	return title
+}
+
+func (i taskItem) Description() string {
+	parts := []string{string(i.task.Priority), string(i.task.Status)}
+	return strings.Join(parts, " · ")
+}
+
+func (i taskItem) FilterValue() string { return i.task.Content }
+
+type tasksModel struct {
+	list      list.Model
+	form      *huh.Form
+	fContent  string
+	fPriority string
+	fProject  string
+	fTag      string
+
+	repos  *repos
+	user   *domain.User
+	status string
+	width  int
+	height int
+}
+
+func newTasksModel(r *repos, user *domain.User) tasksModel {
+	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
+	l.Title = "Tasks"
+	l.Styles.Title = titleStyle
+	return tasksModel{repos: r, user: user, list: l}
+}
+
+func (m tasksModel) reload() tea.Cmd {
+	return func() tea.Msg { return tasksLoadMsg{} }
+}
+
+type tasksLoadMsg struct{}
+
+func (m tasksModel) Init() tea.Cmd { return m.reload() }
+
+func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
+	if m.form != nil {
+		f, cmd := m.form.Update(msg)
+		if form, ok := f.(*huh.Form); ok {
+			m.form = form
 		}
-		for _, t := range tasks {
-			overdue := ""
-			if t.IsOverdue() {
-				overdue = colorRed + " OVERDUE" + colorReset
-			}
-			proj := ""
-			if t.ProjectID != nil {
-				proj = fmt.Sprintf(" [proj:%d]", *t.ProjectID)
-			}
-			fmt.Printf("  %d. [%s][%s]%s %s%s\n", t.ID, t.Priority, t.Status, proj, t.Content, overdue)
-		}
-		fmt.Println("\n  a.Add  c.Complete  d.Delete  b.Back")
-		switch strings.TrimSpace(a.readLine("Choice: ")) {
-		case "a":
-			a.addTask()
-		case "c":
-			idStr := a.readLine("Task ID to complete: ")
-			var id int64
-			fmt.Sscanf(idStr, "%d", &id)
-			a.completeTask(id)
-		case "d":
-			idStr := a.readLine("Task ID to delete: ")
-			var id int64
-			fmt.Sscanf(idStr, "%d", &id)
-			if err := a.taskRepo.Delete(id); err != nil {
-				fmt.Println("Error:", err)
+		if m.form.State == huh.StateCompleted {
+			m.form = nil
+			if err := m.saveTask(); err != nil {
+				m.status = errorStyle.Render("Error: " + err.Error())
 			} else {
-				fmt.Println(colorGreen + "Deleted." + colorReset)
+				m.status = "Task created."
 			}
-		case "b":
-			return
+			return m, m.reload()
+		}
+		if m.form.State == huh.StateAborted {
+			m.form = nil
+			m.status = "Cancelled."
+		}
+		return m, cmd
+	}
+
+	switch msg := msg.(type) {
+	case tasksLoadMsg:
+		tasks, _ := m.repos.tasks.GetAllByUser(m.user.ID)
+		items := make([]list.Item, len(tasks))
+		for i, t := range tasks {
+			items[i] = taskItem{task: t}
+		}
+		m.list.SetItems(items)
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc", "h", "backspace":
+			return m, func() tea.Msg { return backMsg{} }
+		case "a":
+			m.fContent, m.fPriority, m.fProject, m.fTag = "", "MEDIUM", "", ""
+			m.form = m.buildAddForm()
+			return m, m.form.Init()
+		case "d":
+			if item, ok := m.list.SelectedItem().(taskItem); ok {
+				if err := m.repos.tasks.Delete(item.task.ID); err != nil {
+					m.status = errorStyle.Render("Error: " + err.Error())
+				} else {
+					m.status = "Deleted."
+				}
+				return m, m.reload()
+			}
+		case "c":
+			if item, ok := m.list.SelectedItem().(taskItem); ok {
+				t := item.task
+				t.Complete()
+				if err := m.repos.tasks.Update(t); err != nil {
+					m.status = errorStyle.Render("Error: " + err.Error())
+				} else {
+					m.status = "Marked done."
+				}
+				return m, m.reload()
+			}
 		}
 	}
+
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
 }
 
-func (a *App) addTask() {
-	content := strings.TrimSpace(a.readLine("Content: "))
-	if content == "" {
-		return
+func (m tasksModel) View() string {
+	if m.form != nil {
+		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
 	}
-	prioStr := strings.ToUpper(strings.TrimSpace(a.readLine("Priority H/M/L [M]: ")))
-	priority := domain.PriorityMedium
-	switch prioStr {
-	case "H":
-		priority = domain.PriorityHigh
-	case "L":
-		priority = domain.PriorityLow
+	help := statusBarStyle.Render("a add  c complete  d delete  esc back")
+	body := m.list.View()
+	if m.status != "" {
+		body += "\n" + m.status
 	}
-	projectID := a.pickProject()
-	tagID := a.pickTag()
+	return lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.NewStyle().Padding(1, 2).Render(body),
+		help,
+	)
+}
 
+func (m tasksModel) setSize(w, h int) tasksModel {
+	m.width, m.height = w, h
+	m.list.SetSize(w-4, h-4)
+	return m
+}
+
+func (m *tasksModel) buildAddForm() *huh.Form {
+	projects, _ := m.repos.projects.GetAllByUser(m.user.ID)
+	projOpts := []huh.Option[string]{huh.NewOption("(none)", "")}
+	for _, p := range projects {
+		projOpts = append(projOpts, huh.NewOption(p.Name, fmt.Sprintf("%d", p.ID)))
+	}
+
+	tags, _ := m.repos.tags.GetAllByUser(m.user.ID)
+	tagOpts := []huh.Option[string]{huh.NewOption("(none)", "")}
+	for _, t := range tags {
+		tagOpts = append(tagOpts, huh.NewOption(t.Name, fmt.Sprintf("%d", t.ID)))
+	}
+
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Content").
+				Value(&m.fContent),
+			huh.NewSelect[string]().
+				Title("Priority").
+				Options(
+					huh.NewOption("High", "HIGH"),
+					huh.NewOption("Medium", "MEDIUM"),
+					huh.NewOption("Low", "LOW"),
+				).
+				Value(&m.fPriority),
+			huh.NewSelect[string]().
+				Title("Project (optional)").
+				Options(projOpts...).
+				Value(&m.fProject),
+			huh.NewSelect[string]().
+				Title("Tag (optional)").
+				Options(tagOpts...).
+				Value(&m.fTag),
+		),
+	)
+}
+
+func (m *tasksModel) saveTask() error {
 	task := &domain.Task{
-		UserID:    a.currentUser.ID,
-		ProjectID: projectID,
-		TagID:     tagID,
-		Content:   content,
-		Status:    domain.TaskStatusTodo,
-		Priority:  priority,
+		UserID:   m.user.ID,
+		Content:  m.fContent,
+		Status:   domain.TaskStatusTodo,
+		Priority: domain.Priority(m.fPriority),
 	}
-	if err := a.taskRepo.Create(task); err != nil {
-		fmt.Println("Error:", err)
-	} else {
-		fmt.Printf("%sTask created (id=%d)%s\n", colorGreen, task.ID, colorReset)
+	if m.fProject != "" {
+		var id int64
+		fmt.Sscanf(m.fProject, "%d", &id)
+		task.ProjectID = &id
 	}
-}
-
-func (a *App) completeTask(id int64) {
-	task, err := a.taskRepo.GetByID(id)
-	if err != nil {
-		fmt.Println("Task not found")
-		return
+	if m.fTag != "" {
+		var id int64
+		fmt.Sscanf(m.fTag, "%d", &id)
+		task.TagID = &id
 	}
-	task.Complete()
-	if err := a.taskRepo.Update(task); err != nil {
-		fmt.Println("Error:", err)
-	} else {
-		fmt.Println(colorGreen + "Marked as done." + colorReset)
-	}
+	return m.repos.tasks.Create(task)
 }
