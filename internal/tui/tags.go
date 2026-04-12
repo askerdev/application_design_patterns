@@ -2,50 +2,140 @@ package tui
 
 import (
 	"fmt"
-	"strings"
+
+	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 
 	"taskflow/internal/domain"
 )
 
-func (a *App) tagsMenu() {
-	for {
-		fmt.Printf("\n%s-- Tags --%s\n", colorCyan, colorReset)
-		tags, _ := a.tagRepo.GetAllByUser(a.currentUser.ID)
-		if len(tags) == 0 {
-			fmt.Println("  (no tags)")
+type tagItem struct{ tag *domain.Tag }
+
+func (i tagItem) Title() string       { return fmt.Sprintf("%s  %s", i.tag.Name, i.tag.Color) }
+func (i tagItem) Description() string { return "" }
+func (i tagItem) FilterValue() string { return i.tag.Name }
+
+type tagsModel struct {
+	list   list.Model
+	form   *huh.Form
+	fName  string
+	fColor string
+
+	repos  *repos
+	user   *domain.User
+	status string
+	width  int
+	height int
+}
+
+func newTagsModel(r *repos, user *domain.User) tagsModel {
+	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
+	l.Title = "Tags"
+	l.Styles.Title = titleStyle
+	return tagsModel{repos: r, user: user, list: l}
+}
+
+func (m tagsModel) reload() tea.Cmd {
+	return func() tea.Msg { return tagsLoadMsg{} }
+}
+
+type tagsLoadMsg struct{}
+
+func (m tagsModel) Init() tea.Cmd { return m.reload() }
+
+func (m tagsModel) Update(msg tea.Msg) (tagsModel, tea.Cmd) {
+	if m.form != nil {
+		f, cmd := m.form.Update(msg)
+		if form, ok := f.(*huh.Form); ok {
+			m.form = form
 		}
-		for _, t := range tags {
-			fmt.Printf("  %d. %s  %s■%s\n", t.ID, t.Name, t.Color, colorReset)
+		if m.form.State == huh.StateCompleted {
+			m.form = nil
+			if err := m.saveTag(); err != nil {
+				m.status = errorStyle.Render("Error: " + err.Error())
+			} else {
+				m.status = "Tag created."
+			}
+			return m, m.reload()
 		}
-		fmt.Println("\n  a.Add  d.Delete  b.Back")
-		switch strings.TrimSpace(a.readLine("Choice: ")) {
+		if m.form.State == huh.StateAborted {
+			m.form = nil
+			m.status = "Cancelled."
+		}
+		return m, cmd
+	}
+
+	switch msg := msg.(type) {
+	case tagsLoadMsg:
+		tags, _ := m.repos.tags.GetAllByUser(m.user.ID)
+		items := make([]list.Item, len(tags))
+		for i, t := range tags {
+			items[i] = tagItem{tag: t}
+		}
+		m.list.SetItems(items)
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc", "h", "backspace":
+			return m, func() tea.Msg { return backMsg{} }
 		case "a":
-			name := strings.TrimSpace(a.readLine("Tag name: "))
-			color := strings.TrimSpace(a.readLine("Color (e.g. #ff0000): "))
-			if color == "" {
-				color = "#ffffff"
-			}
-			tag := &domain.Tag{
-				UserID: a.currentUser.ID,
-				Name:   name,
-				Color:  color,
-			}
-			if err := a.tagRepo.Create(tag); err != nil {
-				fmt.Println("Error:", err)
-			} else {
-				fmt.Printf("%sTag created (id=%d)%s\n", colorGreen, tag.ID, colorReset)
-			}
+			m.fName, m.fColor = "", "#ffffff"
+			m.form = huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().Title("Name").Value(&m.fName),
+					huh.NewInput().Title("Color hex").Placeholder("#ffffff").Value(&m.fColor),
+				),
+			)
+			return m, m.form.Init()
 		case "d":
-			idStr := a.readLine("Tag ID to delete: ")
-			var id int64
-			fmt.Sscanf(idStr, "%d", &id)
-			if err := a.tagRepo.Delete(id); err != nil {
-				fmt.Println("Error:", err)
-			} else {
-				fmt.Println(colorGreen + "Deleted." + colorReset)
+			if item, ok := m.list.SelectedItem().(tagItem); ok {
+				if err := m.repos.tags.Delete(item.tag.ID); err != nil {
+					m.status = errorStyle.Render("Error: " + err.Error())
+				} else {
+					m.status = "Deleted."
+				}
+				return m, m.reload()
 			}
-		case "b":
-			return
 		}
 	}
+
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+func (m tagsModel) View() string {
+	if m.form != nil {
+		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
+	}
+	help := statusBarStyle.Render("a add  d delete  esc back")
+	body := m.list.View()
+	if m.status != "" {
+		body += "\n" + m.status
+	}
+	return lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.NewStyle().Padding(1, 2).Render(body),
+		help,
+	)
+}
+
+func (m tagsModel) setSize(w, h int) tagsModel {
+	m.width, m.height = w, h
+	m.list.SetSize(w-4, h-4)
+	return m
+}
+
+func (m *tagsModel) saveTag() error {
+	color := m.fColor
+	if color == "" {
+		color = "#ffffff"
+	}
+	return m.repos.tags.Create(&domain.Tag{
+		UserID: m.user.ID,
+		Name:   m.fName,
+		Color:  color,
+	})
 }
