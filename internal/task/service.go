@@ -12,6 +12,7 @@ type Service interface {
 	Create(t *domain.Task) error
 	Update(t *domain.Task) error
 	Delete(id int64) error
+	Iterate(userID int64) Iterator
 }
 
 type service struct{ repo repository.TaskRepository }
@@ -27,4 +28,8 @@ func (s *service) ListByProject(projectID int64) ([]*domain.Task, error) {
 }
 func (s *service) Create(t *domain.Task) error { return s.repo.Create(t) }
 func (s *service) Update(t *domain.Task) error { return s.repo.Update(t) }
-func (s *service) Delete(id int64) error       { return s.repo.Delete(id) }
+func (s *service) Delete(id int64) error { return s.repo.Delete(id) }
+func (s *service) Iterate(userID int64) Iterator {
+	tasks, _ := s.repo.GetAllByUser(userID)
+	return NewSliceIterator(tasks)
+}

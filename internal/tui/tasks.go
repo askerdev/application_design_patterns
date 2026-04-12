@@ -97,7 +97,6 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tasksLoadMsg:
-		tasks, _ := m.svcs.Tasks.List(m.user.ID)
 		projects, _ := m.svcs.Projects.List(m.user.ID)
 		projMap := make(map[int64]string, len(projects))
 		for _, p := range projects {
@@ -108,8 +107,10 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 		for _, t := range tags {
 			tagMap[t.ID] = t.Name
 		}
-		items := make([]list.Item, len(tasks))
-		for i, t := range tasks {
+		iter := m.svcs.Tasks.Iterate(m.user.ID)
+		var items []list.Item
+		for iter.HasNext() {
+			t := iter.Next()
 			proj, tag := "", ""
 			if t.ProjectID != nil {
 				proj = projMap[*t.ProjectID]
@@ -117,7 +118,7 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 			if t.TagID != nil {
 				tag = tagMap[*t.TagID]
 			}
-			items[i] = taskItem{task: t, projectName: proj, tagName: tag}
+			items = append(items, taskItem{task: t, projectName: proj, tagName: tag})
 		}
 		m.list.SetItems(items)
 		return m, nil
