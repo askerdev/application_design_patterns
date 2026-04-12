@@ -19,6 +19,7 @@ type Reminder struct {
 	ReminderTime time.Time
 	Status       ReminderStatus
 	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (r *Reminder) IsReady() bool {
@@ -27,8 +28,10 @@ func (r *Reminder) IsReady() bool {
 
 func (r *Reminder) MarkAsSent() {
 	r.Status = ReminderStatusSent
+	r.UpdatedAt = time.Now()
 }
 
 func (r *Reminder) MarkAsFailed() {
 	r.Status = ReminderStatusFailed
+	r.UpdatedAt = time.Now()
 }
