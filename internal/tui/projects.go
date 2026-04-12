@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -11,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"taskflow/internal/domain"
+	projectcomposite "taskflow/internal/project"
 )
 
 type projectItem struct{ project *domain.Project }
@@ -125,34 +125,37 @@ func (m *projectsModel) refreshDetail() {
 		return
 	}
 	p := item.project
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Name:   %s\n", p.Name)
-	fmt.Fprintf(&sb, "Status: %s\n", p.Status)
-	if p.Description != "" {
-		fmt.Fprintf(&sb, "\n%s\n", p.Description)
-	}
+
+	node := projectcomposite.NewProjectNode(p.Name, string(p.Status))
 
 	tasks, _ := m.svcs.Tasks.ListByProject(p.ID)
-	fmt.Fprintf(&sb, "\nTasks (%d):\n", len(tasks))
 	for _, t := range tasks {
-		overdue := ""
-		if t.IsOverdue() {
-			overdue = " OVERDUE"
-		}
-		fmt.Fprintf(&sb, "  [%s] %s%s\n", t.Status, t.Content, overdue)
+		node.Add(projectcomposite.NewTaskLeaf(t.Content, string(t.Status), t.IsOverdue()))
 	}
 
+	notes, _ := m.svcs.Notes.List(m.user.ID)
+	for _, n := range notes {
+		if n.ProjectID != nil && *n.ProjectID == p.ID {
+			node.Add(projectcomposite.NewNoteLeaf(n.Title, n.Content))
+		}
+	}
+
+	content := projectcomposite.Render(node, 0)
+
+	// Append pomodoro sessions
 	sessions, _ := m.svcs.Pomodoro.ListCompletedByProject(p.ID)
-	fmt.Fprintf(&sb, "\nPomodoro sessions (%d):\n", len(sessions))
-	for _, s := range sessions {
-		start := ""
-		if s.StartTime != nil {
-			start = " @ " + s.StartTime.Format("2006-01-02 15:04")
+	if len(sessions) > 0 {
+		content += fmt.Sprintf("\nPomodoro sessions (%d):\n", len(sessions))
+		for _, s := range sessions {
+			start := ""
+			if s.StartTime != nil {
+				start = " @ " + s.StartTime.Format("2006-01-02 15:04")
+			}
+			content += fmt.Sprintf("  %dmin%s\n", s.WorkDuration, start)
 		}
-		fmt.Fprintf(&sb, "  %dmin%s\n", s.WorkDuration, start)
 	}
 
-	m.detail.SetContent(sb.String())
+	m.detail.SetContent(content)
 	m.detail.GotoTop()
 }
 
