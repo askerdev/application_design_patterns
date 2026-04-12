@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -26,6 +27,7 @@ func main() {
 	tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
 	reminderRepo := repository.NewReminderRepo(conn)
 	reminderService := telegram.NewReminderService(reminderRepo)
+	reminderService.SetClient(tgClient)
 	reminderService.Register(telegram.NewTelegramNotifier(tgClient))
 
 	// Background goroutine: check reminders every minute
@@ -37,6 +39,7 @@ func main() {
 		}
 	}()
 
-	app := tui.New(conn, reminderService)
-	app.Run()
+	if _, err := tui.New(conn, reminderService).Run(); err != nil {
+		log.Fatal(err)
+	}
 }
