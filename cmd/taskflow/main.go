@@ -32,6 +32,7 @@ func main() {
 
 	// ── Repositories ─────────────────────────────────────────────────────────
 	taskRepo := sqliterepo.NewTaskRepo(conn)
+	cachedTaskRepo := tasksvc.NewCachingTaskRepo(taskRepo)
 	projectRepo := sqliterepo.NewProjectRepo(conn)
 	noteRepo := sqliterepo.NewNoteRepo(conn)
 	reminderRepo := sqliterepo.NewReminderRepo(conn)
@@ -48,7 +49,7 @@ func main() {
 
 	// ── Services ──────────────────────────────────────────────────────────────
 	svcs := tui.Services{
-		Tasks:     tasksvc.NewService(taskRepo),
+		Tasks:     tasksvc.NewService(cachedTaskRepo),
 		Projects:  projectsvc.NewService(projectRepo),
 		Notes:     notesvc.NewService(noteRepo),
 		Reminders: remindersvc.NewService(reminderRepo, tgReminderSvc),
