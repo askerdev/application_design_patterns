@@ -17,7 +17,7 @@ func TestMigrationsCreateTables(t *testing.T) {
 		t.Fatalf("migrations failed: %v", err)
 	}
 
-	tables := []string{"users", "projects", "tasks", "notes", "reminders", "pomodoro_sessions", "tags"}
+	tables := []string{"users", "projects", "tags", "tasks", "notes", "reminders", "pomodoro_sessions"}
 	for _, table := range tables {
 		var name string
 		row := conn.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table)
