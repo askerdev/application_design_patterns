@@ -1,14 +1,12 @@
 package tui
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"taskflow/internal/domain"
+	"taskflow/internal/stats"
 )
 
 type statsModel struct {
@@ -65,26 +63,14 @@ func (m statsModel) setSize(w, h int) statsModel {
 }
 
 func (m *statsModel) buildContent() string {
-	sum, err := m.svcs.Stats.Summarize(m.user.ID)
-	if err != nil {
-		return "Error loading stats: " + err.Error()
-	}
+	taskReport := stats.NewTaskCountReport(m.svcs.Stats)
+	etaReport := stats.NewProjectETAReport(m.svcs.Stats)
 
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Tasks: %d total  |  %d done  |  %d todo  |  %d in-progress\n\n",
-		sum.Total, sum.Done, sum.Todo, sum.InProgress)
+	taskSection := stats.Generate(taskReport, m.user.ID)
+	etaSection := stats.Generate(etaReport, m.user.ID)
 
-	if len(sum.Projects) > 0 {
-		sb.WriteString("Project ETA:\n")
-		for _, p := range sum.Projects {
-			if !p.HasETA {
-				fmt.Fprintf(&sb, "  %s: %d remaining (no history)\n", p.Name, p.Remaining)
-			} else {
-				hours := int(p.ETAMins) / 60
-				mins := int(p.ETAMins) % 60
-				fmt.Fprintf(&sb, "  %s: %d remaining — ETA ~%dh%dm\n", p.Name, p.Remaining, hours, mins)
-			}
-		}
+	if etaSection == "" {
+		return taskSection
 	}
-	return sb.String()
+	return taskSection + "\n\n" + etaSection
 }
