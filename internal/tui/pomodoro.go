@@ -204,7 +204,9 @@ func (m *pomodoroModel) startSession() tea.Cmd {
 	machine := state.NewPomodoroMachine(dur)
 	machine.Start()
 	session.State = domain.SessionState(machine.StateName())
-	m.repos.pomodoro.Update(session)
+	if err := m.repos.pomodoro.Update(session); err != nil {
+		m.status = errorStyle.Render("Error: " + err.Error())
+	}
 
 	m.machine = machine
 	m.session = session
@@ -223,7 +225,9 @@ func (m *pomodoroModel) syncSession() {
 	if m.machine.FinishTime != nil {
 		m.session.FinishTime = m.machine.FinishTime
 	}
-	m.repos.pomodoro.Update(m.session)
+	if err := m.repos.pomodoro.Update(m.session); err != nil {
+		m.status = errorStyle.Render("Sync error: " + err.Error())
+	}
 }
 
 func (m pomodoroModel) View() string {

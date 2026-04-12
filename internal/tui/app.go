@@ -105,7 +105,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenTags:
 			return m, m.tags.reload()
 		case screenPomodoro:
-			return m, m.pomodoro.reload()
+			cmd := m.pomodoro.reload()
+			if m.pomodoro.machine != nil && m.pomodoro.machine.StateName() == "RUNNING" {
+				cmd = tea.Batch(cmd, tickCmd())
+			}
+			return m, cmd
 		case screenStats:
 			return m, m.stats.reload()
 		}
