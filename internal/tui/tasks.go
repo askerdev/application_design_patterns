@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -10,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"taskflow/internal/domain"
+	taskpkg "taskflow/internal/task"
 )
 
 type taskItem struct {
@@ -50,11 +50,12 @@ type tasksModel struct {
 	fProject  *string
 	fTag      *string
 
-	svcs   Services
-	user   *domain.User
-	status string
-	width  int
-	height int
+	svcs    Services
+	user    *domain.User
+	history taskpkg.CommandHistory
+	status  string
+	width   int
+	height  int
 }
 
 func newTasksModel(svcs Services, user *domain.User) tasksModel {
@@ -140,24 +141,33 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 				return m, m.form.Init()
 			case "d":
 				if item, ok := m.list.SelectedItem().(taskItem); ok {
-					if err := m.svcs.Tasks.Delete(item.task.ID); err != nil {
+					cmd := taskpkg.NewDeleteTaskCommand(m.svcs.Tasks, item.task)
+					if err := cmd.Execute(); err != nil {
 						m.status = errorStyle.Render("Error: " + err.Error())
 					} else {
+						m.history.Push(cmd)
 						m.status = "Deleted."
 					}
 					return m, m.reload()
 				}
 			case "x":
 				if item, ok := m.list.SelectedItem().(taskItem); ok {
-					t := item.task
-					t.Complete()
-					if err := m.svcs.Tasks.Update(t); err != nil {
+					cmd := taskpkg.NewCompleteTaskCommand(m.svcs.Tasks, item.task)
+					if err := cmd.Execute(); err != nil {
 						m.status = errorStyle.Render("Error: " + err.Error())
 					} else {
+						m.history.Push(cmd)
 						m.status = "Marked done."
 					}
 					return m, m.reload()
 				}
+			case "u":
+				if err := m.history.Undo(); err != nil {
+					m.status = errorStyle.Render("Undo failed: " + err.Error())
+				} else {
+					m.status = "Undone."
+				}
+				return m, m.reload()
 			}
 		}
 	}
@@ -171,7 +181,7 @@ func (m tasksModel) View() string {
 	if m.form != nil {
 		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
 	}
-	help := statusBarStyle.Render("a add  x complete  d delete  / filter  tab switch  q quit")
+	help := statusBarStyle.Render("a add  x complete  d delete  u undo  / filter  tab switch  q quit")
 	body := m.list.View()
 	if m.status != "" {
 		body += "\n" + m.status
