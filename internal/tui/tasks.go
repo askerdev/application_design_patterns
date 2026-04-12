@@ -31,7 +31,11 @@ func (i taskItem) Title() string {
 }
 
 func (i taskItem) Description() string {
-	s := strings.Join([]string{string(i.task.Priority), string(i.task.Status), i.projectName}, " · ")
+	r := taskpkg.NewOverdueDecorator(taskpkg.NewPriorityDecorator(&taskpkg.BaseRenderer{}))
+	s := r.Render(i.task)
+	if i.projectName != "" {
+		s += " · " + i.projectName
+	}
 	if i.tagName != "" {
 		s += " #" + i.tagName
 	}
