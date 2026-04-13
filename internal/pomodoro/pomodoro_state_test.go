@@ -91,3 +91,37 @@ func TestPomodoroCancelFromPaused(t *testing.T) {
 		t.Errorf("expected CANCELLED, got %s", s.StateName())
 	}
 }
+
+func TestPomodoroMachine_Tick_Decrements(t *testing.T) {
+	m := pomodoro.NewPomodoroMachine(1) // 1 minute = 60 seconds
+	m.Start()
+	if m.StateName() != "RUNNING" {
+		t.Fatal("expected RUNNING after Start")
+	}
+	m.Tick()
+	if m.RemainingTime != 59 {
+		t.Errorf("expected 59 after one tick, got %d", m.RemainingTime)
+	}
+}
+
+func TestPomodoroMachine_Tick_CompletesWhenZero(t *testing.T) {
+	m := pomodoro.NewPomodoroMachine(1)
+	m.Start()
+	m.RemainingTime = 1
+	completed := m.Tick()
+	if !completed {
+		t.Error("expected Tick to return true when session completes")
+	}
+	if m.StateName() != "COMPLETED" {
+		t.Errorf("expected COMPLETED state, got %s", m.StateName())
+	}
+}
+
+func TestPomodoroMachine_Tick_NoOpWhenNotRunning(t *testing.T) {
+	m := pomodoro.NewPomodoroMachine(1)
+	// IDLE state
+	completed := m.Tick()
+	if completed {
+		t.Error("Tick on idle machine should not complete")
+	}
+}

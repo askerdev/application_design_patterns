@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"taskflow/internal/domain"
+	domain "taskflow/internal"
 )
 
 type ReminderRepo struct{ db *sql.DB }

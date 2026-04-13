@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
+	domain "taskflow/internal"
 )
 
 type reminderTickMsg time.Time
@@ -99,14 +99,10 @@ func (m remindersModel) Update(msg tea.Msg) (remindersModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case reminderTickMsg:
-		n := m.svcs.Reminders.Notifier()
-		if n != nil && n.IsConfigured() {
-			if err := n.CheckAndNotify(); err != nil {
-				m.status = errorStyle.Render("Reminder error: " + err.Error())
-			}
-			return m, tea.Batch(m.reload(), reminderTickCmd())
+		if err := m.svcs.Reminders.Tick(); err != nil {
+			m.status = errorStyle.Render("Reminder error: " + err.Error())
 		}
-		return m, reminderTickCmd()
+		return m, tea.Batch(m.reload(), reminderTickCmd())
 
 	case remindersLoadMsg:
 		reminders, _ := m.svcs.Reminders.List(m.user.ID)
@@ -171,9 +167,8 @@ func (m remindersModel) View() string {
 	if m.form != nil {
 		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
 	}
-	n := m.svcs.Reminders.Notifier()
 	tgStatus := "Telegram: NOT CONFIGURED"
-	if n != nil && n.IsConfigured() {
+	if m.svcs.Reminders.IsNotifierConfigured() {
 		tgStatus = "Telegram: configured"
 	}
 	help := statusBarStyle.Render("a add  d delete  / filter  tab switch  q quit")

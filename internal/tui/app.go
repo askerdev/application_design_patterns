@@ -6,14 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
-	notesvc "taskflow/internal/note"
+	domain "taskflow/internal"
 	pomodorosvc "taskflow/internal/pomodoro"
-	projectsvc "taskflow/internal/project"
-	remindersvc "taskflow/internal/reminder"
-	statssvc "taskflow/internal/stats"
-	tasksvc "taskflow/internal/task"
-	tagsvc "taskflow/internal/tag"
 )
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
@@ -34,13 +28,13 @@ const (
 
 // Services bundles all domain service interfaces used by the TUI.
 type Services struct {
-	Tasks     tasksvc.Service
-	Projects  projectsvc.Service
-	Notes     notesvc.Service
-	Reminders remindersvc.Service
-	Tags      tagsvc.Service
+	Tasks     domain.TaskService
+	Projects  domain.ProjectService
+	Notes     domain.NoteService
+	Reminders domain.ReminderService
+	Tags      domain.TagService
 	Pomodoro  pomodorosvc.Service
-	Stats     statssvc.Service
+	Stats     domain.StatsService
 }
 
 // ── Root model ────────────────────────────────────────────────────────────────

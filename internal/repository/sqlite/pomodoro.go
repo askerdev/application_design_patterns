@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"time"
 
-	"taskflow/internal/domain"
+	domain "taskflow/internal"
 )
 
 type PomodoroRepo struct{ db *sql.DB }

@@ -40,6 +40,21 @@ func (m *PomodoroMachine) Resume() error   { return m.state.Resume(m) }
 func (m *PomodoroMachine) Complete() error { return m.state.Complete(m) }
 func (m *PomodoroMachine) Cancel() error   { return m.state.Cancel(m) }
 
+// Tick advances the timer by one second.
+// Returns true when the session has just completed.
+func (m *PomodoroMachine) Tick() bool {
+	if m.state.Name() != "RUNNING" {
+		return false
+	}
+	m.RemainingTime--
+	if m.RemainingTime <= 0 {
+		m.RemainingTime = 0
+		m.Complete()
+		return true
+	}
+	return false
+}
+
 type IdleState struct{}
 
 func (s *IdleState) Name() string { return "IDLE" }

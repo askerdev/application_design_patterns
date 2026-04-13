@@ -7,19 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 
+	domain "taskflow/internal"
 	"taskflow/internal/app"
 	"taskflow/internal/config"
 	"taskflow/internal/db"
-	"taskflow/internal/domain"
-	notesvc "taskflow/internal/note"
+	tgnot "taskflow/internal/notifications/telegram"
 	pomodorosvc "taskflow/internal/pomodoro"
-	projectsvc "taskflow/internal/project"
-	remindersvc "taskflow/internal/reminder"
 	sqliterepo "taskflow/internal/repository/sqlite"
-	statssvc "taskflow/internal/stats"
-	tasksvc "taskflow/internal/task"
-	tagsvc "taskflow/internal/tag"
-	"taskflow/internal/telegram"
 	"taskflow/internal/tui"
 )
 
@@ -30,7 +24,6 @@ func main() {
 
 	// ── Repositories ──────────────────────────────────────────────────────────
 	taskRepo := sqliterepo.NewTaskRepo(conn)
-	cachedTaskRepo := tasksvc.NewCachingTaskRepo(taskRepo)
 	projectRepo := sqliterepo.NewProjectRepo(conn)
 	noteRepo := sqliterepo.NewNoteRepo(conn)
 	reminderRepo := sqliterepo.NewReminderRepo(conn)
@@ -39,25 +32,26 @@ func main() {
 	userRepo := sqliterepo.NewUserRepo(conn)
 
 	// ── Telegram ──────────────────────────────────────────────────────────────
-	tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
-	tgReminderSvc := telegram.NewReminderService(reminderRepo)
-	tgSender := telegram.NewClientAdapter(tgClient)
-	tgReminderSvc.SetSender(tgSender)
-	tgReminderSvc.Register(telegram.NewTelegramNotifier(tgSender))
+	tgClient := tgnot.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
+	tgSender := tgnot.NewClientAdapter(tgClient)
+	tgCoordinator := tgnot.NewReminderCoordinator(reminderRepo)
+	tgCoordinator.SetSender(tgSender)
+	tgCoordinator.Register(tgnot.NewTelegramNotifier(tgSender))
 
 	// ── Services ──────────────────────────────────────────────────────────────
-	taskSvc := tasksvc.NewService(cachedTaskRepo)
-	projectSvc := projectsvc.NewService(projectRepo)
-	noteSvc := notesvc.NewService(noteRepo)
+	cachedTaskRepo := domain.NewCachingTaskRepo(taskRepo)
+	taskSvc := domain.NewTaskService(cachedTaskRepo)
+	projectSvc := domain.NewProjectService(projectRepo)
+	noteSvc := domain.NewNoteService(noteRepo)
 
 	svcs := tui.Services{
 		Tasks:     taskSvc,
 		Projects:  projectSvc,
 		Notes:     noteSvc,
-		Reminders: remindersvc.NewService(reminderRepo, tgReminderSvc),
-		Tags:      tagsvc.NewService(tagRepo),
+		Reminders: domain.NewReminderService(reminderRepo, tgCoordinator),
+		Tags:      domain.NewTagService(tagRepo),
 		Pomodoro:  pomodorosvc.NewService(pomodoroRepo),
-		Stats:     statssvc.NewService(taskRepo, projectRepo, pomodoroRepo),
+		Stats:     domain.NewStatsService(taskRepo, projectRepo, pomodoroRepo),
 	}
 
 	// ── Bootstrap user ────────────────────────────────────────────────────────

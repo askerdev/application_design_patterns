@@ -5,8 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
-	"taskflow/internal/stats"
+	domain "taskflow/internal"
 )
 
 type statsModel struct {
@@ -63,11 +62,11 @@ func (m statsModel) setSize(w, h int) statsModel {
 }
 
 func (m *statsModel) buildContent() string {
-	taskReport := stats.NewTaskCountReport(m.svcs.Stats)
-	etaReport := stats.NewProjectETAReport(m.svcs.Stats)
+	taskReport := domain.NewTaskCountReport(m.svcs.Stats)
+	etaReport := domain.NewProjectETAReport(m.svcs.Stats)
 
-	taskSection := stats.Generate(taskReport, m.user.ID)
-	etaSection := stats.Generate(etaReport, m.user.ID)
+	taskSection := domain.Generate(taskReport, m.user.ID)
+	etaSection := domain.Generate(etaReport, m.user.ID)
 
 	if etaSection == "" {
 		return taskSection

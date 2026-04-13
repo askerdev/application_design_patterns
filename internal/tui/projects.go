@@ -9,8 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
-	projectcomposite "taskflow/internal/project"
+	domain "taskflow/internal"
 )
 
 type projectItem struct{ project *domain.Project }
@@ -126,21 +125,21 @@ func (m *projectsModel) refreshDetail() {
 	}
 	p := item.project
 
-	node := projectcomposite.NewProjectNode(p.Name, string(p.Status))
+	node := domain.NewProjectNode(p.Name, string(p.Status))
 
 	tasks, _ := m.svcs.Tasks.ListByProject(p.ID)
 	for _, t := range tasks {
-		node.Add(projectcomposite.NewTaskLeaf(t.Content, string(t.Status), t.IsOverdue()))
+		node.Add(domain.NewTaskLeaf(t.Content, string(t.Status), t.IsOverdue()))
 	}
 
 	notes, _ := m.svcs.Notes.List(m.user.ID)
 	for _, n := range notes {
 		if n.ProjectID != nil && *n.ProjectID == p.ID {
-			node.Add(projectcomposite.NewNoteLeaf(n.Title, n.Content))
+			node.Add(domain.NewNoteLeaf(n.Title, n.Content))
 		}
 	}
 
-	content := projectcomposite.Render(node, 0)
+	content := domain.Render(node, 0)
 
 	// Append pomodoro sessions
 	sessions, _ := m.svcs.Pomodoro.ListCompletedByProject(p.ID)

@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
+	domain "taskflow/internal"
 	"taskflow/internal/pomodoro"
 )
 
@@ -93,16 +93,12 @@ func (m pomodoroModel) Update(msg tea.Msg) (pomodoroModel, tea.Cmd) {
 	if m.machine != nil {
 		switch msg := msg.(type) {
 		case tickMsg:
-			if m.machine.StateName() == "RUNNING" {
-				m.machine.RemainingTime--
-				m.session.RemainingTime = m.machine.RemainingTime
-				if m.machine.RemainingTime <= 0 {
-					m.machine.Complete()
-					m.syncSession()
-					m.machine = nil
-					m.status = "Session complete!"
-					return m, m.reload()
-				}
+			completed := m.machine.Tick()
+			m.syncSession()
+			if completed {
+				m.machine = nil
+				m.status = "Session complete!"
+				return m, m.reload()
 			}
 			pct := 1.0 - float64(m.machine.RemainingTime)/float64(m.totalSecs)
 			var progCmd tea.Cmd

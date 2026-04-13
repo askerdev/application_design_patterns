@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
+	domain "taskflow/internal"
 )
 
 type noteItem struct {

@@ -8,8 +8,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"taskflow/internal/domain"
-	taskpkg "taskflow/internal/task"
+	domain "taskflow/internal"
 )
 
 type taskItem struct {
@@ -31,7 +30,7 @@ func (i taskItem) Title() string {
 }
 
 func (i taskItem) Description() string {
-	r := taskpkg.NewOverdueDecorator(taskpkg.NewPriorityDecorator(&taskpkg.BaseRenderer{}))
+	r := domain.NewOverdueDecorator(domain.NewPriorityDecorator(&domain.BaseRenderer{}))
 	s := r.Render(i.task)
 	if i.projectName != "" {
 		s += " · " + i.projectName
@@ -56,7 +55,7 @@ type tasksModel struct {
 
 	svcs    Services
 	user    *domain.User
-	history taskpkg.CommandHistory
+	history domain.CommandHistory
 	status  string
 	width   int
 	height  int
@@ -145,7 +144,7 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 				return m, m.form.Init()
 			case "d":
 				if item, ok := m.list.SelectedItem().(taskItem); ok {
-					cmd := taskpkg.NewDeleteTaskCommand(m.svcs.Tasks, item.task)
+					cmd := domain.NewDeleteTaskCommand(m.svcs.Tasks, item.task)
 					if err := cmd.Execute(); err != nil {
 						m.status = errorStyle.Render("Error: " + err.Error())
 					} else {
@@ -156,7 +155,7 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 				}
 			case "x":
 				if item, ok := m.list.SelectedItem().(taskItem); ok {
-					cmd := taskpkg.NewCompleteTaskCommand(m.svcs.Tasks, item.task)
+					cmd := domain.NewCompleteTaskCommand(m.svcs.Tasks, item.task)
 					if err := cmd.Execute(); err != nil {
 						m.status = errorStyle.Render("Error: " + err.Error())
 					} else {

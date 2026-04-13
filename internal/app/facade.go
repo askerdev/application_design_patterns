@@ -1,22 +1,19 @@
 package app
 
 import (
-	"taskflow/internal/domain"
-	notesvc "taskflow/internal/note"
-	projectsvc "taskflow/internal/project"
-	tasksvc "taskflow/internal/task"
+	domain "taskflow/internal"
 )
 
 // AppFacade is the Facade pattern: single simplified entry point
 // for common operations across multiple subsystems.
 type AppFacade struct {
-	tasks    tasksvc.Service
-	projects projectsvc.Service
-	notes    notesvc.Service
+	tasks    domain.TaskService
+	projects domain.ProjectService
+	notes    domain.NoteService
 	user     *domain.User
 }
 
-func NewAppFacade(tasks tasksvc.Service, projects projectsvc.Service, notes notesvc.Service, user *domain.User) *AppFacade {
+func NewAppFacade(tasks domain.TaskService, projects domain.ProjectService, notes domain.NoteService, user *domain.User) *AppFacade {
 	return &AppFacade{tasks: tasks, projects: projects, notes: notes, user: user}
 }
 
