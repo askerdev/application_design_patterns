@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 	"taskflow/internal/notifications/telegram"
 )
 

@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"taskflow/internal"
+	"taskflow/internal/domain"
 )
 
 // countingTaskRepo wraps stubTaskService to count GetAllByUser calls.

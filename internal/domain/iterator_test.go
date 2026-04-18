@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"taskflow/internal"
+	"taskflow/internal/domain"
 )
 
 func TestSliceIterator_WalksAll(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 	"taskflow/internal/app"
 	"taskflow/internal/config"
 	"taskflow/internal/db"

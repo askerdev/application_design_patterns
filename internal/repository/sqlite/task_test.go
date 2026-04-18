@@ -7,7 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"taskflow/internal/db"
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 	"taskflow/internal/repository/sqlite"
 )
 

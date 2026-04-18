@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"taskflow/internal"
+	"taskflow/internal/domain"
 )
 
 // stubTaskService is a minimal in-memory TaskService for testing commands.

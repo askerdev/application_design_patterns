@@ -1,6 +1,6 @@
 package repository
 
-import domain "taskflow/internal"
+import domain "taskflow/internal/domain"
 
 // Type aliases re-export domain's repository interfaces.
 // The canonical definitions live in taskflow/internal/domain.

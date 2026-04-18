@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"taskflow/internal"
+	"taskflow/internal/domain"
 )
 
 // --- Task tests ---

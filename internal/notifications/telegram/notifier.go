@@ -1,7 +1,7 @@
 package telegram
 
 import (
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 	notifications "taskflow/internal/notifications"
 )
 

@@ -1,7 +1,7 @@
 package app
 
 import (
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 )
 
 // AppFacade is the Facade pattern: single simplified entry point

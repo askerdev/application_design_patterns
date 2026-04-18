@@ -5,7 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 )
 
 type statsModel struct {

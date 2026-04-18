@@ -1,7 +1,7 @@
 package pomodoro
 
 import (
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 	"taskflow/internal/repository"
 )
 

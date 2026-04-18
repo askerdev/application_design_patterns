@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 )
 
 type reminderTickMsg time.Time

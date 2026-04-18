@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	domain "taskflow/internal"
+	domain "taskflow/internal/domain"
 )
 
 type projectItem struct{ project *domain.Project }

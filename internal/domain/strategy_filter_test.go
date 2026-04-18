@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"taskflow/internal"
+	"taskflow/internal/domain"
 )
 
 func makeFilterTasks() []*domain.Task {
