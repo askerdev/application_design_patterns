@@ -13,7 +13,7 @@ func NewEntityFactory() *EntityFactory {
 
 // CreateTask creates a new Task with the given parameters and sets default values.
 // The factory ensures consistent initialization across the application.
-func (f *EntityFactory) CreateTask(userID int64, content string, priority Priority, projectID, tagID *int64) *Task {
+func (f *EntityFactory) CreateTask(userID int64, content string, priority Priority, projectID, tagID *int64, dueDate *time.Time) *Task {
 	return &Task{
 		UserID:    userID,
 		Content:   content,
@@ -21,6 +21,7 @@ func (f *EntityFactory) CreateTask(userID int64, content string, priority Priori
 		Priority:  priority,
 		ProjectID: projectID,
 		TagID:     tagID,
+		DueDate:   dueDate,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

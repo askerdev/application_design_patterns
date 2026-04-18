@@ -1,6 +1,9 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // WorkItem is the component interface — implemented by both composite and leaf nodes.
 type WorkItem interface {
@@ -70,13 +73,14 @@ func (l *NoteLeaf) Children() []WorkItem { return nil }
 // Render formats the whole tree as a string for display.
 // Composite items show their children indented.
 func Render(item WorkItem, indent int) string {
-	prefix := ""
-	for i := 0; i < indent; i++ {
-		prefix += "  "
+	var prefix strings.Builder
+	for range indent {
+		prefix.WriteString("  ")
 	}
-	result := prefix + item.Title() + "\n"
+	var result strings.Builder
+	result.WriteString(prefix.String() + item.Title() + "\n")
 	for _, child := range item.Children() {
-		result += Render(child, indent+1)
+		result.WriteString(Render(child, indent+1))
 	}
-	return result
+	return result.String()
 }

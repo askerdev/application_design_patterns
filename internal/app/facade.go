@@ -19,7 +19,7 @@ func NewAppFacade(tasks domain.TaskService, projects domain.ProjectService, note
 
 func (f *AppFacade) AddTask(content, priority string) (*domain.Task, error) {
 	factory := domain.NewEntityFactory()
-	t := factory.CreateTask(f.user.ID, content, domain.Priority(priority), nil, nil)
+	t := factory.CreateTask(f.user.ID, content, domain.Priority(priority), nil, nil, nil)
 	if err := f.tasks.Create(t); err != nil {
 		return nil, err
 	}

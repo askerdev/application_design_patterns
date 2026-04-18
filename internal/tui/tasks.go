@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -45,6 +46,20 @@ func (i taskItem) FilterValue() string {
 	return i.task.Content + " " + i.projectName + " " + i.tagName
 }
 
+type namedFilter struct {
+	label    string
+	strategy domain.FilterStrategy
+}
+
+func taskFilters() []namedFilter {
+	return []namedFilter{
+		{"все", nil},
+		{"todo", domain.ByStatusFilter{Status: domain.TaskStatusTodo}},
+		{"done", domain.ByStatusFilter{Status: domain.TaskStatusDone}},
+		{"просроченные", domain.ByDateFilter{From: time.Time{}, To: time.Now()}},
+	}
+}
+
 type tasksModel struct {
 	list      list.Model
 	form      *huh.Form
@@ -52,13 +67,15 @@ type tasksModel struct {
 	fPriority *string
 	fProject  *string
 	fTag      *string
+	fDueDate  *string
 
-	svcs    Services
-	user    *domain.User
-	history domain.CommandHistory
-	status  string
-	width   int
-	height  int
+	svcs      Services
+	user      *domain.User
+	history   domain.CommandHistory
+	filterIdx int
+	status    string
+	width     int
+	height    int
 }
 
 func newTasksModel(svcs Services, user *domain.User) tasksModel {
@@ -78,6 +95,11 @@ func (m tasksModel) Init() tea.Cmd { return m.reload() }
 
 func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 	if m.form != nil {
+		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+			m.form = nil
+			m.status = "Cancelled."
+			return m, nil
+		}
 		f, cmd := m.form.Update(msg)
 		if form, ok := f.(*huh.Form); ok {
 			m.form = form
@@ -112,9 +134,15 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 			tagMap[t.ID] = t.Name
 		}
 		iter := m.svcs.Tasks.Iterate(m.user.ID)
-		var items []list.Item
+		var all []*domain.Task
 		for iter.HasNext() {
-			t := iter.Next()
+			all = append(all, iter.Next())
+		}
+		if f := taskFilters()[m.filterIdx].strategy; f != nil {
+			all = f.Filter(all)
+		}
+		var items []list.Item
+		for _, t := range all {
 			proj, tag := "", ""
 			if t.ProjectID != nil {
 				proj = projMap[*t.ProjectID]
@@ -138,8 +166,8 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 					m.status = errorStyle.Render("Create a project first.")
 					return m, nil
 				}
-				content, priority, proj, tag := "", "MEDIUM", fmt.Sprintf("%d", projects[0].ID), ""
-				m.fContent, m.fPriority, m.fProject, m.fTag = &content, &priority, &proj, &tag
+				content, priority, proj, tag, due := "", "MEDIUM", fmt.Sprintf("%d", projects[0].ID), "", ""
+				m.fContent, m.fPriority, m.fProject, m.fTag, m.fDueDate = &content, &priority, &proj, &tag, &due
 				m.form = m.buildAddForm(projects)
 				return m, m.form.Init()
 			case "d":
@@ -164,6 +192,10 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 					}
 					return m, m.reload()
 				}
+			case "f":
+				m.filterIdx = (m.filterIdx + 1) % len(taskFilters())
+				m.status = "Фильтр: " + taskFilters()[m.filterIdx].label
+				return m, m.reload()
 			case "u":
 				if err := m.history.Undo(); err != nil {
 					m.status = errorStyle.Render("Undo failed: " + err.Error())
@@ -184,7 +216,7 @@ func (m tasksModel) View() string {
 	if m.form != nil {
 		return lipgloss.NewStyle().Padding(1, 2).Render(m.form.View())
 	}
-	help := statusBarStyle.Render("a add  x complete  d delete  u undo  / filter  tab switch  q quit")
+	help := statusBarStyle.Render(fmt.Sprintf("a add  x complete  d delete  u undo  f фильтр[%s]  / поиск  tab switch  q quit", taskFilters()[m.filterIdx].label))
 	body := m.list.View()
 	if m.status != "" {
 		body += "\n" + m.status
@@ -234,6 +266,10 @@ func (m *tasksModel) buildAddForm(projects []*domain.Project) *huh.Form {
 				Title("Tag (optional)").
 				Options(tagOpts...).
 				Value(m.fTag),
+			huh.NewInput().
+				Title("Due Date (YYYY-MM-DD, optional)").
+				Placeholder("2026-05-01").
+				Value(m.fDueDate),
 		),
 	)
 }
@@ -247,7 +283,22 @@ func (m *tasksModel) saveTask() error {
 		fmt.Sscanf(*m.fTag, "%d", &id)
 		tagID = &id
 	}
+	var dueDate *time.Time
+	if *m.fDueDate != "" {
+		t, err := time.ParseInLocation("2006-01-02", *m.fDueDate, time.Local)
+		if err == nil {
+			dueDate = &t
+		}
+	}
 	factory := domain.NewEntityFactory()
-	t := factory.CreateTask(m.user.ID, *m.fContent, domain.Priority(*m.fPriority), &projID, tagID)
-	return m.svcs.Tasks.Create(t)
+	t := factory.CreateTask(m.user.ID, *m.fContent, domain.Priority(*m.fPriority), &projID, tagID, dueDate)
+	if err := m.svcs.Tasks.Create(t); err != nil {
+		return err
+	}
+	if dueDate != nil {
+		reminderTime := dueDate.Add(9 * time.Hour)
+		r := factory.CreateReminder(m.user.ID, "Дедлайн задачи: "+t.Content, reminderTime, &projID, tagID)
+		_ = m.svcs.Reminders.Create(r)
+	}
+	return nil
 }

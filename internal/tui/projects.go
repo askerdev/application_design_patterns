@@ -50,6 +50,11 @@ func (m projectsModel) Init() tea.Cmd { return m.reload() }
 
 func (m projectsModel) Update(msg tea.Msg) (projectsModel, tea.Cmd) {
 	if m.form != nil {
+		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
+			m.form = nil
+			m.status = "Cancelled."
+			return m, nil
+		}
 		f, cmd := m.form.Update(msg)
 		if form, ok := f.(*huh.Form); ok {
 			m.form = form

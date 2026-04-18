@@ -156,7 +156,19 @@ func main() {
 	projectCmd := &cobra.Command{Use: "project", Short: "Manage projects"}
 	projectCmd.AddCommand(projectAddCmd, projectListCmd)
 
-	rootCmd.AddCommand(taskCmd, projectCmd)
+	seedCmd := &cobra.Command{
+		Use:   "seed",
+		Short: "Populate DB with demo data (≥20 records)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := db.RunSeed(conn); err != nil {
+				return err
+			}
+			fmt.Println("Seeded: 4 projects, 4 tags, 10 tasks, 4 notes, 4 reminders, 5 pomodoro sessions")
+			return nil
+		},
+	}
+
+	rootCmd.AddCommand(taskCmd, projectCmd, seedCmd)
 
 	// Handle legacy --version flag
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
