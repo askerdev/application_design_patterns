@@ -2,8 +2,6 @@ package domain
 
 import "sync"
 
-// CachingTaskRepo is the Proxy pattern: same interface as TaskRepository,
-// adds transparent in-memory caching of per-user task lists.
 type CachingTaskRepo struct {
 	real  TaskRepository
 	mu    sync.Mutex

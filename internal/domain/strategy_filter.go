@@ -2,12 +2,10 @@ package domain
 
 import "time"
 
-// FilterStrategy defines how tasks are filtered.
 type FilterStrategy interface {
 	Filter(tasks []*Task) []*Task
 }
 
-// ByStatusFilter filters tasks by status.
 type ByStatusFilter struct {
 	Status TaskStatus
 }
@@ -22,7 +20,6 @@ func (f ByStatusFilter) Filter(tasks []*Task) []*Task {
 	return result
 }
 
-// ByTagFilter filters tasks by tag.
 type ByTagFilter struct {
 	TagID int64
 }
@@ -37,7 +34,6 @@ func (f ByTagFilter) Filter(tasks []*Task) []*Task {
 	return result
 }
 
-// ByDateFilter filters tasks by due date range.
 type ByDateFilter struct {
 	From time.Time
 	To   time.Time

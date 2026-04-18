@@ -1,6 +1,5 @@
 package domain
 
-// Summary is an aggregated overview of a user's task state.
 type Summary struct {
 	Total      int
 	Done       int
@@ -9,7 +8,6 @@ type Summary struct {
 	Projects   []ProjectETA
 }
 
-// ProjectETA holds per-project task progress and estimated time to completion.
 type ProjectETA struct {
 	Name      string
 	Remaining int
@@ -17,7 +15,6 @@ type ProjectETA struct {
 	HasETA    bool
 }
 
-// StatsService computes stats aggregates.
 type StatsService interface {
 	Summarize(userID int64) (*Summary, error)
 }
@@ -28,7 +25,6 @@ type statsSvc struct {
 	pomodoro PomodoroRepository
 }
 
-// NewStatsService returns a StatsService backed by the provided repositories.
 func NewStatsService(tasks TaskRepository, projects ProjectRepository, pomodoro PomodoroRepository) StatsService {
 	return &statsSvc{tasks: tasks, projects: projects, pomodoro: pomodoro}
 }

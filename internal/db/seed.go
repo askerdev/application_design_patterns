@@ -152,12 +152,12 @@ func RunSeed(db *sql.DB) error {
 	}
 
 	sessions := []struct {
-		projectID    *int64
-		duration     int
-		state        string
-		startTime    string
-		finishTime   string
-		remaining    int
+		projectID  *int64
+		duration   int
+		state      string
+		startTime  string
+		finishTime string
+		remaining  int
 	}{
 		{p(projectIDs[1]), 25, "COMPLETED", "2026-04-14 10:00:00", "2026-04-14 10:25:00", 0},
 		{p(projectIDs[1]), 25, "COMPLETED", "2026-04-14 11:00:00", "2026-04-14 11:25:00", 0},

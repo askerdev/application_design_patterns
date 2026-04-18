@@ -1,13 +1,10 @@
 package domain
 
-// Iterator is the Iterator pattern: sequential access to a collection
-// without exposing the underlying slice.
 type Iterator interface {
 	HasNext() bool
 	Next() *Task
 }
 
-// SliceIterator walks a []*Task slice.
 type SliceIterator struct {
 	tasks []*Task
 	index int

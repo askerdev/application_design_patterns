@@ -4,8 +4,6 @@ import (
 	domain "taskflow/internal/domain"
 )
 
-// AppFacade is the Facade pattern: single simplified entry point
-// for common operations across multiple subsystems.
 type AppFacade struct {
 	tasks    domain.TaskService
 	projects domain.ProjectService

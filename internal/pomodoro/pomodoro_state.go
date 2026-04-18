@@ -18,10 +18,10 @@ var errInvalidTransition = errors.New("invalid state transition")
 
 type PomodoroMachine struct {
 	state         PomodoroState
-	WorkDuration  int // minutes
+	WorkDuration  int
 	StartTime     *time.Time
 	FinishTime    *time.Time
-	RemainingTime int // seconds
+	RemainingTime int
 }
 
 func NewPomodoroMachine(workDurationMin int) *PomodoroMachine {
@@ -40,8 +40,6 @@ func (m *PomodoroMachine) Resume() error   { return m.state.Resume(m) }
 func (m *PomodoroMachine) Complete() error { return m.state.Complete(m) }
 func (m *PomodoroMachine) Cancel() error   { return m.state.Cancel(m) }
 
-// Tick advances the timer by one second.
-// Returns true when the session has just completed.
 func (m *PomodoroMachine) Tick() bool {
 	if m.state.Name() != "RUNNING" {
 		return false
@@ -93,9 +91,9 @@ func (s *RunningState) Cancel(m *PomodoroMachine) error {
 
 type PausedState struct{}
 
-func (s *PausedState) Name() string                    { return "PAUSED" }
-func (s *PausedState) Start(m *PomodoroMachine) error  { return errInvalidTransition }
-func (s *PausedState) Pause(m *PomodoroMachine) error  { return errInvalidTransition }
+func (s *PausedState) Name() string                   { return "PAUSED" }
+func (s *PausedState) Start(m *PomodoroMachine) error { return errInvalidTransition }
+func (s *PausedState) Pause(m *PomodoroMachine) error { return errInvalidTransition }
 func (s *PausedState) Resume(m *PomodoroMachine) error {
 	m.SetState(&RunningState{})
 	return nil

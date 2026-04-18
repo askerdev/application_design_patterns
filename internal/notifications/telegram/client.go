@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-// Client — adaptee for the Adapter pattern — wraps the Telegram Bot HTTP API
 type Client struct {
 	token  string
 	chatID int64
@@ -23,7 +22,6 @@ func NewClient(token string, chatID int64) *Client {
 	}
 }
 
-// IsConfigured returns false if token or chatID is missing
 func (c *Client) IsConfigured() bool {
 	return c.token != "" && c.chatID != 0
 }
@@ -33,7 +31,6 @@ type sendMessageRequest struct {
 	Text   string `json:"text"`
 }
 
-// SendMessage sends a text message via Telegram Bot API
 func (c *Client) SendMessage(text string) error {
 	if !c.IsConfigured() {
 		return nil

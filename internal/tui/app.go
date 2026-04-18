@@ -10,8 +10,6 @@ import (
 	pomodorosvc "taskflow/internal/pomodoro"
 )
 
-// ── Tab definitions ───────────────────────────────────────────────────────────
-
 var tabNames = []string{"Tasks", "Projects", "Notes", "Reminders", "Tags", "Pomodoro", "Stats"}
 
 const (
@@ -24,9 +22,6 @@ const (
 	tabStats
 )
 
-// ── Service bundle ────────────────────────────────────────────────────────────
-
-// Services bundles all domain service interfaces used by the TUI.
 type Services struct {
 	Tasks     domain.TaskService
 	Projects  domain.ProjectService
@@ -36,8 +31,6 @@ type Services struct {
 	Pomodoro  pomodorosvc.Service
 	Stats     domain.StatsService
 }
-
-// ── Root model ────────────────────────────────────────────────────────────────
 
 type model struct {
 	activeTab int
@@ -99,13 +92,13 @@ func (m model) tabBar() string {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Always route tick to pomodoro so timer keeps running on any tab
+
 	if _, ok := msg.(tickMsg); ok {
 		updated, cmd := m.pomodoro.Update(msg)
 		m.pomodoro = updated
 		return m, cmd
 	}
-	// Always route reminder tick regardless of active tab
+
 	if _, ok := msg.(reminderTickMsg); ok {
 		updated, cmd := m.reminders.Update(msg)
 		m.reminders = updated
@@ -142,7 +135,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Delegate to active tab
 	switch m.activeTab {
 	case tabTasks:
 		updated, cmd := m.tasks.Update(msg)
@@ -240,9 +232,6 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, bar, content)
 }
 
-// ── Public entry point ────────────────────────────────────────────────────────
-
-// New returns a tea.Program. Call .Run() from main.
 func New(svcs Services, user *domain.User) *tea.Program {
 	return tea.NewProgram(newModel(svcs, user), tea.WithAltScreen())
 }

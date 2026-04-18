@@ -1,6 +1,5 @@
 package domain
 
-// ProjectService defines operations on projects.
 type ProjectService interface {
 	List(userID int64) ([]*Project, error)
 	Create(p *Project) error
@@ -10,7 +9,6 @@ type ProjectService interface {
 
 type projectService struct{ repo ProjectRepository }
 
-// NewProjectService returns a ProjectService backed by repo.
 func NewProjectService(repo ProjectRepository) ProjectService { return &projectService{repo: repo} }
 
 func (s *projectService) List(userID int64) ([]*Project, error) { return s.repo.GetAllByUser(userID) }

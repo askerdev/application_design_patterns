@@ -146,7 +146,6 @@ func (m *projectsModel) refreshDetail() {
 
 	content := domain.Render(node, 0)
 
-	// Append pomodoro sessions
 	sessions, _ := m.svcs.Pomodoro.ListCompletedByProject(p.ID)
 	if len(sessions) > 0 {
 		content += fmt.Sprintf("\nPomodoro sessions (%d):\n", len(sessions))

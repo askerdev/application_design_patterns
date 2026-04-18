@@ -7,8 +7,6 @@ import (
 	"taskflow/internal/domain"
 )
 
-// --- Task tests ---
-
 func TestTaskIsOverdue(t *testing.T) {
 	past := time.Now().Add(-24 * time.Hour)
 	task := domain.Task{DueDate: &past, Status: domain.TaskStatusTodo}
@@ -42,8 +40,6 @@ func TestTaskComplete(t *testing.T) {
 		t.Error("expected UpdatedAt to be set after Complete()")
 	}
 }
-
-// --- Reminder tests ---
 
 func TestReminderIsReady(t *testing.T) {
 	past := time.Now().Add(-1 * time.Minute)

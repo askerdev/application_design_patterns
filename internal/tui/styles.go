@@ -3,8 +3,8 @@ package tui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	colorPrimary   = lipgloss.Color("69")  // soft purple
-	colorSecondary = lipgloss.Color("212") // pink
+	colorPrimary   = lipgloss.Color("69")
+	colorSecondary = lipgloss.Color("212")
 	colorMuted     = lipgloss.Color("241")
 	colorError     = lipgloss.Color("196")
 	colorSuccess   = lipgloss.Color("78")

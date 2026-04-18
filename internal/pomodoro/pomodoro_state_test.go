@@ -93,7 +93,7 @@ func TestPomodoroCancelFromPaused(t *testing.T) {
 }
 
 func TestPomodoroMachine_Tick_Decrements(t *testing.T) {
-	m := pomodoro.NewPomodoroMachine(1) // 1 minute = 60 seconds
+	m := pomodoro.NewPomodoroMachine(1)
 	m.Start()
 	if m.StateName() != "RUNNING" {
 		t.Fatal("expected RUNNING after Start")
@@ -119,7 +119,7 @@ func TestPomodoroMachine_Tick_CompletesWhenZero(t *testing.T) {
 
 func TestPomodoroMachine_Tick_NoOpWhenNotRunning(t *testing.T) {
 	m := pomodoro.NewPomodoroMachine(1)
-	// IDLE state
+
 	completed := m.Tick()
 	if completed {
 		t.Error("Tick on idle machine should not complete")

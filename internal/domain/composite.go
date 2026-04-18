@@ -5,14 +5,12 @@ import (
 	"strings"
 )
 
-// WorkItem is the component interface — implemented by both composite and leaf nodes.
 type WorkItem interface {
 	Title() string
 	Description() string
 	Children() []WorkItem
 }
 
-// ProjectNode is the composite — it has children (tasks, notes).
 type ProjectNode struct {
 	name     string
 	status   string
@@ -31,7 +29,6 @@ func (n *ProjectNode) Title() string        { return fmt.Sprintf("[%s] %s", n.st
 func (n *ProjectNode) Description() string  { return fmt.Sprintf("%d items", len(n.children)) }
 func (n *ProjectNode) Children() []WorkItem { return n.children }
 
-// TaskLeaf is a leaf node representing a single task.
 type TaskLeaf struct {
 	content string
 	status  string
@@ -52,7 +49,6 @@ func (l *TaskLeaf) Title() string {
 func (l *TaskLeaf) Description() string  { return "" }
 func (l *TaskLeaf) Children() []WorkItem { return nil }
 
-// NoteLeaf is a leaf node representing a single note.
 type NoteLeaf struct {
 	title   string
 	preview string
@@ -70,8 +66,6 @@ func (l *NoteLeaf) Title() string        { return "📝 " + l.title }
 func (l *NoteLeaf) Description() string  { return l.preview }
 func (l *NoteLeaf) Children() []WorkItem { return nil }
 
-// Render formats the whole tree as a string for display.
-// Composite items show their children indented.
 func Render(item WorkItem, indent int) string {
 	var prefix strings.Builder
 	for range indent {

@@ -1,12 +1,10 @@
 package domain
 
-// Command is the Command pattern interface.
 type Command interface {
 	Execute() error
 	Undo() error
 }
 
-// CommandHistory holds executed commands for undo.
 type CommandHistory struct {
 	stack []Command
 }
@@ -24,7 +22,6 @@ func (h *CommandHistory) Undo() error {
 	return last.Undo()
 }
 
-// CompleteTaskCommand marks a task as done; undo restores previous status.
 type CompleteTaskCommand struct {
 	svc        TaskService
 	task       *Task
@@ -45,7 +42,6 @@ func (c *CompleteTaskCommand) Undo() error {
 	return c.svc.Update(c.task)
 }
 
-// DeleteTaskCommand deletes a task; undo re-creates it.
 type DeleteTaskCommand struct {
 	svc  TaskService
 	task *Task

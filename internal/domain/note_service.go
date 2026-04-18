@@ -1,6 +1,5 @@
 package domain
 
-// NoteService defines operations on notes.
 type NoteService interface {
 	List(userID int64) ([]*Note, error)
 	Create(n *Note) error
@@ -10,7 +9,6 @@ type NoteService interface {
 
 type noteService struct{ repo NoteRepository }
 
-// NewNoteService returns a NoteService backed by repo.
 func NewNoteService(repo NoteRepository) NoteService { return &noteService{repo: repo} }
 
 func (s *noteService) List(userID int64) ([]*Note, error) { return s.repo.GetAllByUser(userID) }

@@ -5,13 +5,11 @@ import (
 	"strings"
 )
 
-// Report defines the two abstract steps each concrete report must implement.
 type Report interface {
 	fetchData(userID int64) error
 	formatContent() string
 }
 
-// Generate is the template method — calls fetchData then formatContent in order.
 func Generate(r Report, userID int64) string {
 	if err := r.fetchData(userID); err != nil {
 		return "Error: " + err.Error()
@@ -19,7 +17,6 @@ func Generate(r Report, userID int64) string {
 	return r.formatContent()
 }
 
-// TaskCountReport counts tasks by status.
 type TaskCountReport struct {
 	svc  StatsService
 	data *Summary
@@ -43,7 +40,6 @@ func (r *TaskCountReport) formatContent() string {
 		r.data.Total, r.data.Done, r.data.Todo, r.data.InProgress)
 }
 
-// ProjectETAReport shows per-project ETA.
 type ProjectETAReport struct {
 	svc  StatsService
 	data *Summary

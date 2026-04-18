@@ -5,13 +5,10 @@ import (
 	notifications "taskflow/internal/notifications"
 )
 
-// NotificationObserver is the Observer pattern interface for reminder notifications.
 type NotificationObserver interface {
 	Notify(r *domain.Reminder) error
 }
 
-// ReminderCoordinator implements the notification coordinator role.
-// It fetches pending reminders and dispatches to registered observers (Observer pattern).
 type ReminderCoordinator struct {
 	observers []NotificationObserver
 	repo      domain.ReminderRepository
@@ -22,7 +19,6 @@ func NewReminderCoordinator(repo domain.ReminderRepository) *ReminderCoordinator
 	return &ReminderCoordinator{repo: repo}
 }
 
-// SetSender stores the MessageSender used for IsConfigured checks.
 func (c *ReminderCoordinator) SetSender(sender notifications.MessageSender) {
 	c.sender = sender
 }
@@ -31,12 +27,10 @@ func (c *ReminderCoordinator) Register(o NotificationObserver) {
 	c.observers = append(c.observers, o)
 }
 
-// IsConfigured returns true when the sender is set and ready.
 func (c *ReminderCoordinator) IsConfigured() bool {
 	return c.sender != nil && c.sender.IsConfigured()
 }
 
-// CheckAndNotify fetches pending reminders and notifies all observers.
 func (c *ReminderCoordinator) CheckAndNotify() error {
 	pending, err := c.repo.GetPending()
 	if err != nil {
@@ -59,7 +53,6 @@ func (c *ReminderCoordinator) CheckAndNotify() error {
 	return nil
 }
 
-// TelegramNotifier is a concrete Observer that sends reminders via Telegram.
 type TelegramNotifier struct {
 	sender notifications.MessageSender
 }

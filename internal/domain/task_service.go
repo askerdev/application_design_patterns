@@ -1,6 +1,5 @@
 package domain
 
-// TaskService defines operations on tasks.
 type TaskService interface {
 	List(userID int64) ([]*Task, error)
 	ListByProject(projectID int64) ([]*Task, error)
@@ -12,7 +11,6 @@ type TaskService interface {
 
 type taskService struct{ repo TaskRepository }
 
-// NewTaskService returns a TaskService backed by repo.
 func NewTaskService(repo TaskRepository) TaskService { return &taskService{repo: repo} }
 
 func (s *taskService) List(userID int64) ([]*Task, error)       { return s.repo.GetAllByUser(userID) }

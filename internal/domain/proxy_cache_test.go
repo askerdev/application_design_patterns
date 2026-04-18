@@ -6,7 +6,6 @@ import (
 	"taskflow/internal/domain"
 )
 
-// countingTaskRepo wraps stubTaskService to count GetAllByUser calls.
 type countingTaskRepo struct {
 	calls int
 	inner *stubTaskService

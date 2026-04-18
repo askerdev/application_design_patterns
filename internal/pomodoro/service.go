@@ -5,7 +5,6 @@ import (
 	"taskflow/internal/repository"
 )
 
-// Service defines CRUD operations on pomodoro sessions.
 type Service interface {
 	List(userID int64) ([]*domain.PomodoroSession, error)
 	ListCompletedByProject(projectID int64) ([]*domain.PomodoroSession, error)
@@ -15,7 +14,6 @@ type Service interface {
 
 type svc struct{ repo repository.PomodoroRepository }
 
-// NewService returns a Service backed by repo.
 func NewService(repo repository.PomodoroRepository) Service { return &svc{repo: repo} }
 
 func (s *svc) List(userID int64) ([]*domain.PomodoroSession, error) {

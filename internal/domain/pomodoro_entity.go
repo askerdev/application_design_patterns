@@ -17,9 +17,9 @@ type PomodoroSession struct {
 	UserID        int64
 	ProjectID     *int64
 	StartTime     *time.Time
-	WorkDuration  int // minutes
+	WorkDuration  int
 	FinishTime    *time.Time
-	RemainingTime int // seconds
+	RemainingTime int
 	State         SessionState
 	CreatedAt     time.Time
 }

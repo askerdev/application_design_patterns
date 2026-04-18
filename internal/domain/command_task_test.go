@@ -6,7 +6,6 @@ import (
 	"taskflow/internal/domain"
 )
 
-// stubTaskService is a minimal in-memory TaskService for testing commands.
 type stubTaskService struct {
 	tasks  map[int64]*domain.Task
 	nextID int64

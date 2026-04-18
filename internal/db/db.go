@@ -18,7 +18,7 @@ func Instance(path string) *sql.DB {
 		if err != nil {
 			panic("db: failed to open: " + err.Error())
 		}
-		conn.SetMaxOpenConns(1) // SQLite: single writer
+		conn.SetMaxOpenConns(1)
 		if err := RunMigrations(conn); err != nil {
 			panic("db: migrations failed: " + err.Error())
 		}

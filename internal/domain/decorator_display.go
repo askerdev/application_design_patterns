@@ -2,19 +2,16 @@ package domain
 
 import "fmt"
 
-// Renderer is the component interface for the Decorator pattern.
 type Renderer interface {
 	Render(t *Task) string
 }
 
-// BaseRenderer returns the basic description of a task.
 type BaseRenderer struct{}
 
 func (r *BaseRenderer) Render(t *Task) string {
 	return fmt.Sprintf("%s · %s", t.Priority, t.Status)
 }
 
-// PriorityDecorator wraps a Renderer and prepends a priority badge.
 type PriorityDecorator struct {
 	wrapped Renderer
 }
@@ -36,7 +33,6 @@ func (d *PriorityDecorator) Render(t *Task) string {
 	return badge + d.wrapped.Render(t)
 }
 
-// OverdueDecorator wraps a Renderer and appends an overdue warning.
 type OverdueDecorator struct {
 	wrapped Renderer
 }

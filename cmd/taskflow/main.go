@@ -7,10 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	domain "taskflow/internal/domain"
 	"taskflow/internal/app"
 	"taskflow/internal/config"
 	"taskflow/internal/db"
+	domain "taskflow/internal/domain"
 	tgnot "taskflow/internal/notifications/telegram"
 	pomodorosvc "taskflow/internal/pomodoro"
 	sqliterepo "taskflow/internal/repository/sqlite"
@@ -22,7 +22,6 @@ func main() {
 	conn := db.Instance(cfg.DBPath)
 	defer conn.Close()
 
-	// ── Repositories ──────────────────────────────────────────────────────────
 	taskRepo := sqliterepo.NewTaskRepo(conn)
 	projectRepo := sqliterepo.NewProjectRepo(conn)
 	noteRepo := sqliterepo.NewNoteRepo(conn)
@@ -31,14 +30,12 @@ func main() {
 	pomodoroRepo := sqliterepo.NewPomodoroRepo(conn)
 	userRepo := sqliterepo.NewUserRepo(conn)
 
-	// ── Telegram ──────────────────────────────────────────────────────────────
 	tgClient := tgnot.NewClient(cfg.TelegramBotToken, cfg.TelegramChatID)
 	tgSender := tgnot.NewClientAdapter(tgClient)
 	tgCoordinator := tgnot.NewReminderCoordinator(reminderRepo)
 	tgCoordinator.SetSender(tgSender)
 	tgCoordinator.Register(tgnot.NewTelegramNotifier(tgSender))
 
-	// ── Services ──────────────────────────────────────────────────────────────
 	cachedTaskRepo := domain.NewCachingTaskRepo(taskRepo)
 	taskSvc := domain.NewTaskService(cachedTaskRepo)
 	projectSvc := domain.NewProjectService(projectRepo)
@@ -54,7 +51,6 @@ func main() {
 		Stats:     domain.NewStatsService(taskRepo, projectRepo, pomodoroRepo),
 	}
 
-	// ── Bootstrap user ────────────────────────────────────────────────────────
 	user, err := userRepo.GetFirst()
 	if err != nil {
 		user = &domain.User{Username: "default"}
@@ -63,10 +59,8 @@ func main() {
 		}
 	}
 
-	// ── Facade ────────────────────────────────────────────────────────────────
 	facade := app.NewAppFacade(taskSvc, projectSvc, noteSvc, user)
 
-	// ── Cobra CLI ─────────────────────────────────────────────────────────────
 	rootCmd := &cobra.Command{
 		Use:   "taskflow",
 		Short: "TaskFlow — task manager with TUI",
@@ -76,7 +70,6 @@ func main() {
 		},
 	}
 
-	// taskflow task add "content" [--priority HIGH]
 	var priority string
 	taskAddCmd := &cobra.Command{
 		Use:   "add [content]",
@@ -119,7 +112,6 @@ func main() {
 	taskCmd := &cobra.Command{Use: "task", Short: "Manage tasks"}
 	taskCmd.AddCommand(taskAddCmd, taskListCmd)
 
-	// taskflow project add "name"
 	projectAddCmd := &cobra.Command{
 		Use:   "add [name]",
 		Short: "Add a new project",
@@ -170,7 +162,6 @@ func main() {
 
 	rootCmd.AddCommand(taskCmd, projectCmd, seedCmd)
 
-	// Handle legacy --version flag
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
 		fmt.Println("TaskFlow v0.1.0")
 		return
