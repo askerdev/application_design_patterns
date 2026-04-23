@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://taskflow.app/bpmn"
+             id="Definitions_BP2">
+
+  <!-- BP2: Pomodoro Session Lifecycle -->
+
+  <dataStore id="DS_PomodoroSessions" name="pomodoro_sessions"/>
+
+  <collaboration id="Collaboration_BP2">
+    <participant id="Participant_User2"     name="Пользователь" processRef="Process_User2"/>
+    <participant id="Participant_TaskFlow2" name="TaskFlow"      processRef="Process_TaskFlow2"/>
+  </collaboration>
+
+  <process id="Process_User2" name="Пользователь" isExecutable="false">
+    <startEvent id="Start_User2" name="Начало">
+      <outgoing>SU2_1</outgoing>
+    </startEvent>
+    <userTask id="Task_ConfigSession" name="Настройка сессии (duration, project)">
+      <incoming>SU2_1</incoming>
+      <outgoing>SU2_2</outgoing>
+    </userTask>
+    <endEvent id="End_User2_Done" name="Готово">
+      <incoming>SU2_2</incoming>
+    </endEvent>
+    <sequenceFlow id="SU2_1" sourceRef="Start_User2"       targetRef="Task_ConfigSession"/>
+    <sequenceFlow id="SU2_2" sourceRef="Task_ConfigSession" targetRef="End_User2_Done"/>
+  </process>
+
+  <process id="Process_TaskFlow2" name="TaskFlow" isExecutable="false">
+
+    <laneSet id="LaneSet_BP2">
+      <lane id="Lane_System_BP2" name="System">
+        <flowNodeRef>Task_CreateSession</flowNodeRef>
+        <flowNodeRef>Task_StartSession</flowNodeRef>
+        <flowNodeRef>EG_Wait</flowNodeRef>
+        <flowNodeRef>ICE_TimerExpired</flowNodeRef>
+        <flowNodeRef>Task_Complete</flowNodeRef>
+        <flowNodeRef>Task_CalcETA</flowNodeRef>
+        <flowNodeRef>End_BP2_Completed</flowNodeRef>
+        <flowNodeRef>ICE_Pause</flowNodeRef>
+        <flowNodeRef>Task_Pause</flowNodeRef>
+        <flowNodeRef>Task_Resume</flowNodeRef>
+        <flowNodeRef>ICE_Cancel</flowNodeRef>
+        <flowNodeRef>Task_Cancel</flowNodeRef>
+        <flowNodeRef>End_BP2_Cancelled</flowNodeRef>
+      </lane>
+    </laneSet>
+
+    <dataStoreReference id="DSR_PomodoroSessions" name="pomodoro_sessions" dataStoreRef="DS_PomodoroSessions"/>
+
+    <task id="Task_CreateSession" name="PomodoroMachine(IDLE) → Create() → DB">
+      <outgoing>SP2_1</outgoing>
+      <dataOutputAssociation id="DOA_CreateSession">
+        <targetRef>DSR_PomodoroSessions</targetRef>
+      </dataOutputAssociation>
+    </task>
+    <task id="Task_StartSession" name="Start() → RUNNING">
+      <incoming>SP2_1</incoming>
+      <outgoing>SP2_2</outgoing>
+    </task>
+    <eventBasedGateway id="EG_Wait" name="Ожидание события">
+      <incoming>SP2_2</incoming>
+      <incoming>SF_Resume_back</incoming>
+      <outgoing>SP2_timer</outgoing>
+      <outgoing>SP2_pause</outgoing>
+      <outgoing>SP2_cancel</outgoing>
+    </eventBasedGateway>
+
+    <intermediateCatchEvent id="ICE_TimerExpired" name="Таймер истёк">
+      <incoming>SP2_timer</incoming>
+      <outgoing>SP2_3</outgoing>
+      <timerEventDefinition id="TD_Expired"/>
+    </intermediateCatchEvent>
+    <task id="Task_Complete" name="Complete() → COMPLETED → DB">
+      <incoming>SP2_3</incoming>
+      <outgoing>SP2_4</outgoing>
+      <dataOutputAssociation id="DOA_CompleteSession">
+        <targetRef>DSR_PomodoroSessions</targetRef>
+      </dataOutputAssociation>
+    </task>
+    <task id="Task_CalcETA" name="CalculateETA()">
+      <incoming>SP2_4</incoming>
+      <outgoing>SP2_5</outgoing>
+    </task>
+    <endEvent id="End_BP2_Completed" name="Завершена">
+      <incoming>SP2_5</incoming>
+    </endEvent>
+
+    <intermediateCatchEvent id="ICE_Pause" name="Pause">
+      <incoming>SP2_pause</incoming>
+      <outgoing>SP2_6</outgoing>
+      <messageEventDefinition id="MD_Pause"/>
+    </intermediateCatchEvent>
+    <task id="Task_Pause" name="Pause() → PAUSED → DB">
+      <incoming>SP2_6</incoming>
+      <outgoing>SP2_7</outgoing>
+    </task>
+    <task id="Task_Resume" name="Resume() → RUNNING">
+      <incoming>SP2_7</incoming>
+      <outgoing>SF_Resume_back</outgoing>
+    </task>
+
+    <intermediateCatchEvent id="ICE_Cancel" name="Cancel">
+      <incoming>SP2_cancel</incoming>
+      <outgoing>SP2_8</outgoing>
+      <messageEventDefinition id="MD_Cancel"/>
+    </intermediateCatchEvent>
+    <task id="Task_Cancel" name="Cancel() → CANCELLED → DB">
+      <incoming>SP2_8</incoming>
+      <outgoing>SP2_9</outgoing>
+    </task>
+    <endEvent id="End_BP2_Cancelled" name="Отменена">
+      <incoming>SP2_9</incoming>
+    </endEvent>
+
+    <sequenceFlow id="SP2_1"          sourceRef="Task_CreateSession"  targetRef="Task_StartSession"/>
+    <sequenceFlow id="SP2_2"          sourceRef="Task_StartSession"   targetRef="EG_Wait"/>
+    <sequenceFlow id="SP2_timer"      sourceRef="EG_Wait"             targetRef="ICE_TimerExpired"/>
+    <sequenceFlow id="SP2_pause"      sourceRef="EG_Wait"             targetRef="ICE_Pause"/>
+    <sequenceFlow id="SP2_cancel"     sourceRef="EG_Wait"             targetRef="ICE_Cancel"/>
+    <sequenceFlow id="SP2_3"          sourceRef="ICE_TimerExpired"    targetRef="Task_Complete"/>
+    <sequenceFlow id="SP2_4"          sourceRef="Task_Complete"       targetRef="Task_CalcETA"/>
+    <sequenceFlow id="SP2_5"          sourceRef="Task_CalcETA"        targetRef="End_BP2_Completed"/>
+    <sequenceFlow id="SP2_6"          sourceRef="ICE_Pause"           targetRef="Task_Pause"/>
+    <sequenceFlow id="SP2_7"          sourceRef="Task_Pause"          targetRef="Task_Resume"/>
+    <sequenceFlow id="SF_Resume_back" sourceRef="Task_Resume"         targetRef="EG_Wait"/>
+    <sequenceFlow id="SP2_8"          sourceRef="ICE_Cancel"          targetRef="Task_Cancel"/>
+    <sequenceFlow id="SP2_9"          sourceRef="Task_Cancel"         targetRef="End_BP2_Cancelled"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_2">
+    <bpmndi:BPMNPlane id="BPMNPlane_2" bpmnElement="Collaboration_BP2">
+
+      <bpmndi:BPMNShape id="Shape_Part_User2" bpmnElement="Participant_User2" isHorizontal="true">
+        <omgdc:Bounds x="160" y="80" width="1690" height="160"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Part_TF2" bpmnElement="Participant_TaskFlow2" isHorizontal="true">
+        <omgdc:Bounds x="160" y="240" width="1690" height="420"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Lane_System_BP2" bpmnElement="Lane_System_BP2" isHorizontal="true">
+        <omgdc:Bounds x="200" y="240" width="1650" height="420"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Start_User2" bpmnElement="Start_User2">
+        <omgdc:Bounds x="252" y="142" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="245" y="185" width="50" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ConfigSession" bpmnElement="Task_ConfigSession">
+        <omgdc:Bounds x="350" y="120" width="220" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_End_User2_Done" bpmnElement="End_User2_Done">
+        <omgdc:Bounds x="1812" y="142" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1803" y="185" width="54" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_CreateSession" bpmnElement="Task_CreateSession">
+        <omgdc:Bounds x="350" y="340" width="220" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_StartSession" bpmnElement="Task_StartSession">
+        <omgdc:Bounds x="630" y="340" width="180" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_EG_Wait" bpmnElement="EG_Wait">
+        <omgdc:Bounds x="872" y="355" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="849" y="412" width="96" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ICE_TimerExpired" bpmnElement="ICE_TimerExpired">
+        <omgdc:Bounds x="992" y="287" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="970" y="330" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Complete" bpmnElement="Task_Complete">
+        <omgdc:Bounds x="1090" y="272" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_CalcETA" bpmnElement="Task_CalcETA">
+        <omgdc:Bounds x="1330" y="272" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_End_BP2_Completed" bpmnElement="End_BP2_Completed">
+        <omgdc:Bounds x="1582" y="287" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1568" y="330" width="64" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ICE_Pause" bpmnElement="ICE_Pause">
+        <omgdc:Bounds x="992" y="360" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="989" y="403" width="42" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Pause" bpmnElement="Task_Pause">
+        <omgdc:Bounds x="1090" y="345" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Resume" bpmnElement="Task_Resume">
+        <omgdc:Bounds x="1330" y="345" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ICE_Cancel" bpmnElement="ICE_Cancel">
+        <omgdc:Bounds x="992" y="450" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="985" y="493" width="50" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Cancel" bpmnElement="Task_Cancel">
+        <omgdc:Bounds x="1090" y="435" width="180" height="66"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_End_BP2_Cancelled" bpmnElement="End_BP2_Cancelled">
+        <omgdc:Bounds x="1582" y="450" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1565" y="493" width="70" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- DataStoreReference: pomodoro_sessions table inside TaskFlow2 pool -->
+      <bpmndi:BPMNShape id="Shape_DSR_PomodoroSessions" bpmnElement="DSR_PomodoroSessions">
+        <omgdc:Bounds x="360" y="555" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="320" y="612" width="130" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_DOA_CreateSession" bpmnElement="DOA_CreateSession">
+        <omgdi:waypoint x="460" y="420"/>
+        <omgdi:waypoint x="385" y="555"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_DOA_CompleteSession" bpmnElement="DOA_CompleteSession">
+        <omgdi:waypoint x="1180" y="305"/>
+        <omgdi:waypoint x="385" y="555"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SU2_1" bpmnElement="SU2_1">
+        <omgdi:waypoint x="288" y="160"/>
+        <omgdi:waypoint x="350" y="160"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SU2_2" bpmnElement="SU2_2">
+        <omgdi:waypoint x="570" y="160"/>
+        <omgdi:waypoint x="1812" y="160"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_1" bpmnElement="SP2_1">
+        <omgdi:waypoint x="570" y="380"/>
+        <omgdi:waypoint x="630" y="380"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_2" bpmnElement="SP2_2">
+        <omgdi:waypoint x="810" y="380"/>
+        <omgdi:waypoint x="872" y="380"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_timer" bpmnElement="SP2_timer">
+        <omgdi:waypoint x="897" y="355"/>
+        <omgdi:waypoint x="897" y="305"/>
+        <omgdi:waypoint x="992" y="305"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_pause" bpmnElement="SP2_pause">
+        <omgdi:waypoint x="922" y="380"/>
+        <omgdi:waypoint x="992" y="378"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_cancel" bpmnElement="SP2_cancel">
+        <omgdi:waypoint x="897" y="405"/>
+        <omgdi:waypoint x="897" y="468"/>
+        <omgdi:waypoint x="992" y="468"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_3" bpmnElement="SP2_3">
+        <omgdi:waypoint x="1028" y="305"/>
+        <omgdi:waypoint x="1090" y="305"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_4" bpmnElement="SP2_4">
+        <omgdi:waypoint x="1270" y="305"/>
+        <omgdi:waypoint x="1330" y="305"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_5" bpmnElement="SP2_5">
+        <omgdi:waypoint x="1510" y="305"/>
+        <omgdi:waypoint x="1582" y="305"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_6" bpmnElement="SP2_6">
+        <omgdi:waypoint x="1028" y="378"/>
+        <omgdi:waypoint x="1090" y="378"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_7" bpmnElement="SP2_7">
+        <omgdi:waypoint x="1270" y="378"/>
+        <omgdi:waypoint x="1330" y="378"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SF_Resume_back" bpmnElement="SF_Resume_back">
+        <omgdi:waypoint x="1420" y="345"/>
+        <omgdi:waypoint x="1420" y="320"/>
+        <omgdi:waypoint x="897" y="320"/>
+        <omgdi:waypoint x="897" y="355"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_8" bpmnElement="SP2_8">
+        <omgdi:waypoint x="1028" y="468"/>
+        <omgdi:waypoint x="1090" y="468"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_SP2_9" bpmnElement="SP2_9">
+        <omgdi:waypoint x="1270" y="468"/>
+        <omgdi:waypoint x="1582" y="468"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</definitions>

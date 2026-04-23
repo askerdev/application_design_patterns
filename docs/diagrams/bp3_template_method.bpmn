@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://taskflow.app/bpmn"
+             id="Definitions_BP3">
+
+  <!--
+    BP3: Шаблонный метод — генерация отчёта
+    Generate() фиксирует алгоритм; конкретные шаги делегируются субклассам.
+  -->
+
+  <dataStore id="DS_Tasks"            name="tasks"/>
+  <dataStore id="DS_Projects"         name="projects"/>
+  <dataStore id="DS_PomodoroSessions" name="pomodoro_sessions"/>
+
+  <collaboration id="Collaboration_BP3">
+    <participant id="Part_Template"  name="Generate() — шаблонный метод" processRef="Proc_Template"/>
+    <participant id="Part_TaskCount" name="TaskCountReport (реализация 1)" processRef="Proc_TaskCount"/>
+    <participant id="Part_ETAReport" name="ProjectETAReport (реализация 2)" processRef="Proc_ETAReport"/>
+
+    <messageFlow id="MF_Fetch_TC"   sourceRef="Task_FetchAbstract"  targetRef="Task_TC_Fetch"/>
+    <messageFlow id="MF_Fetch_ETA"  sourceRef="Task_FetchAbstract"  targetRef="Task_ETA_Fetch"/>
+    <messageFlow id="MF_Format_TC"  sourceRef="Task_FormatAbstract" targetRef="Task_TC_Format"/>
+    <messageFlow id="MF_Format_ETA" sourceRef="Task_FormatAbstract" targetRef="Task_ETA_Format"/>
+  </collaboration>
+
+  <!-- ── Шаблонный метод ──────────────────────────────────────────── -->
+  <process id="Proc_Template" name="Generate()" isExecutable="false">
+    <startEvent id="Start_TM" name="Клиент вызывает Generate(report, userID)">
+      <outgoing>SF_TM1</outgoing>
+    </startEvent>
+    <task id="Task_FetchAbstract" name="fetchData(userID) — абстрактный шаг&#10;делегируется конкретной реализации">
+      <incoming>SF_TM1</incoming>
+      <outgoing>SF_TM2</outgoing>
+    </task>
+    <task id="Task_FormatAbstract" name="formatContent() — абстрактный шаг&#10;делегируется конкретной реализации">
+      <incoming>SF_TM2</incoming>
+      <outgoing>SF_TM3</outgoing>
+    </task>
+    <endEvent id="End_TM" name="Вернуть строку отчёта">
+      <incoming>SF_TM3</incoming>
+    </endEvent>
+    <sequenceFlow id="SF_TM1" sourceRef="Start_TM"            targetRef="Task_FetchAbstract"/>
+    <sequenceFlow id="SF_TM2" sourceRef="Task_FetchAbstract"  targetRef="Task_FormatAbstract"/>
+    <sequenceFlow id="SF_TM3" sourceRef="Task_FormatAbstract" targetRef="End_TM"/>
+  </process>
+
+  <!-- ── TaskCountReport ──────────────────────────────────────────── -->
+  <process id="Proc_TaskCount" name="TaskCountReport" isExecutable="false">
+    <dataStoreReference id="DSR_Tasks_TC" name="tasks" dataStoreRef="DS_Tasks"/>
+
+    <startEvent id="Start_TC"><outgoing>SF_TC1</outgoing></startEvent>
+    <task id="Task_TC_Fetch" name="fetchData: StatsService.Summarize(userID)&#10;читает таблицу tasks по статусам">
+      <incoming>SF_TC1</incoming>
+      <outgoing>SF_TC2</outgoing>
+      <dataInputAssociation id="DIA_TC_Tasks">
+        <sourceRef>DSR_Tasks_TC</sourceRef>
+      </dataInputAssociation>
+    </task>
+    <task id="Task_TC_Format" name="formatContent:&#10;«X total | Y done | Z todo | W in-progress»">
+      <incoming>SF_TC2</incoming>
+      <outgoing>SF_TC3</outgoing>
+    </task>
+    <endEvent id="End_TC"><incoming>SF_TC3</incoming></endEvent>
+    <sequenceFlow id="SF_TC1" sourceRef="Start_TC"       targetRef="Task_TC_Fetch"/>
+    <sequenceFlow id="SF_TC2" sourceRef="Task_TC_Fetch"  targetRef="Task_TC_Format"/>
+    <sequenceFlow id="SF_TC3" sourceRef="Task_TC_Format" targetRef="End_TC"/>
+  </process>
+
+  <!-- ── ProjectETAReport ─────────────────────────────────────────── -->
+  <process id="Proc_ETAReport" name="ProjectETAReport" isExecutable="false">
+    <dataStoreReference id="DSR_Tasks_ETA"    name="tasks"             dataStoreRef="DS_Tasks"/>
+    <dataStoreReference id="DSR_Projects"     name="projects"          dataStoreRef="DS_Projects"/>
+    <dataStoreReference id="DSR_Pomodoro_ETA" name="pomodoro_sessions" dataStoreRef="DS_PomodoroSessions"/>
+
+    <startEvent id="Start_ETA"><outgoing>SF_ETA1</outgoing></startEvent>
+    <task id="Task_ETA_Fetch" name="fetchData: StatsService.Summarize(userID)&#10;читает tasks + projects + pomodoro_sessions → CalculateETA()">
+      <incoming>SF_ETA1</incoming>
+      <outgoing>SF_ETA2</outgoing>
+      <dataInputAssociation id="DIA_ETA_Tasks">
+        <sourceRef>DSR_Tasks_ETA</sourceRef>
+      </dataInputAssociation>
+      <dataInputAssociation id="DIA_ETA_Projects">
+        <sourceRef>DSR_Projects</sourceRef>
+      </dataInputAssociation>
+      <dataInputAssociation id="DIA_ETA_Pomodoro">
+        <sourceRef>DSR_Pomodoro_ETA</sourceRef>
+      </dataInputAssociation>
+    </task>
+    <task id="Task_ETA_Format" name="formatContent:&#10;«Project X: N remaining — ETA ~2h30m»">
+      <incoming>SF_ETA2</incoming>
+      <outgoing>SF_ETA3</outgoing>
+    </task>
+    <endEvent id="End_ETA"><incoming>SF_ETA3</incoming></endEvent>
+    <sequenceFlow id="SF_ETA1" sourceRef="Start_ETA"      targetRef="Task_ETA_Fetch"/>
+    <sequenceFlow id="SF_ETA2" sourceRef="Task_ETA_Fetch"  targetRef="Task_ETA_Format"/>
+    <sequenceFlow id="SF_ETA3" sourceRef="Task_ETA_Format" targetRef="End_ETA"/>
+  </process>
+
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <!-- DI                                                             -->
+  <!-- ══════════════════════════════════════════════════════════════ -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_BP3">
+    <bpmndi:BPMNPlane id="BPMNPlane_BP3" bpmnElement="Collaboration_BP3">
+
+      <!-- ── Пулы (каждый 220px, зазор 20px) ─────────────────────── -->
+      <bpmndi:BPMNShape id="Shape_Part_Template" bpmnElement="Part_Template" isHorizontal="true">
+        <omgdc:Bounds x="160" y="80" width="1240" height="180"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Part_TaskCount" bpmnElement="Part_TaskCount" isHorizontal="true">
+        <omgdc:Bounds x="160" y="280" width="1240" height="200"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_Part_ETAReport" bpmnElement="Part_ETAReport" isHorizontal="true">
+        <omgdc:Bounds x="160" y="500" width="1240" height="230"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ── Pool 1: шаблонный метод ────────────────────────────── -->
+      <bpmndi:BPMNShape id="Shape_Start_TM" bpmnElement="Start_TM">
+        <omgdc:Bounds x="262" y="152" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="212" y="195" width="136" height="40"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_FetchAbstract" bpmnElement="Task_FetchAbstract">
+        <omgdc:Bounds x="360" y="130" width="240" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_FormatAbstract" bpmnElement="Task_FormatAbstract">
+        <omgdc:Bounds x="660" y="130" width="240" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_End_TM" bpmnElement="End_TM">
+        <omgdc:Bounds x="962" y="152" width="36" height="36"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="940" y="195" width="80" height="27"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_SF_TM1" bpmnElement="SF_TM1">
+        <omgdi:waypoint x="298" y="170"/>
+        <omgdi:waypoint x="360" y="170"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_TM2" bpmnElement="SF_TM2">
+        <omgdi:waypoint x="600" y="170"/>
+        <omgdi:waypoint x="660" y="170"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_TM3" bpmnElement="SF_TM3">
+        <omgdi:waypoint x="900" y="170"/>
+        <omgdi:waypoint x="962" y="170"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── Pool 2: TaskCountReport ─────────────────────────────── -->
+      <bpmndi:BPMNShape id="Shape_Start_TC" bpmnElement="Start_TC">
+        <omgdc:Bounds x="262" y="352" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_TC_Fetch" bpmnElement="Task_TC_Fetch">
+        <omgdc:Bounds x="360" y="330" width="240" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_TC_Format" bpmnElement="Task_TC_Format">
+        <omgdc:Bounds x="660" y="330" width="240" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_End_TC" bpmnElement="End_TC">
+        <omgdc:Bounds x="962" y="352" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <!-- tasks table cylinder inside TaskCount pool -->
+      <bpmndi:BPMNShape id="Shape_DSR_Tasks_TC" bpmnElement="DSR_Tasks_TC">
+        <omgdc:Bounds x="460" y="435" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="455" y="492" width="60" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_SF_TC1" bpmnElement="SF_TC1">
+        <omgdi:waypoint x="298" y="370"/>
+        <omgdi:waypoint x="360" y="370"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_TC2" bpmnElement="SF_TC2">
+        <omgdi:waypoint x="600" y="370"/>
+        <omgdi:waypoint x="660" y="370"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_TC3" bpmnElement="SF_TC3">
+        <omgdi:waypoint x="900" y="370"/>
+        <omgdi:waypoint x="962" y="370"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_DIA_TC_Tasks" bpmnElement="DIA_TC_Tasks">
+        <omgdi:waypoint x="485" y="435"/>
+        <omgdi:waypoint x="480" y="410"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── Pool 3: ProjectETAReport ────────────────────────────── -->
+      <bpmndi:BPMNShape id="Shape_Start_ETA" bpmnElement="Start_ETA">
+        <omgdc:Bounds x="262" y="572" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ETA_Fetch" bpmnElement="Task_ETA_Fetch">
+        <omgdc:Bounds x="360" y="550" width="240" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_ETA_Format" bpmnElement="Task_ETA_Format">
+        <omgdc:Bounds x="660" y="550" width="240" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Shape_End_ETA" bpmnElement="End_ETA">
+        <omgdc:Bounds x="962" y="572" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+
+      <!-- tasks cylinder -->
+      <bpmndi:BPMNShape id="Shape_DSR_Tasks_ETA" bpmnElement="DSR_Tasks_ETA">
+        <omgdc:Bounds x="360" y="655" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="355" y="712" width="60" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- projects cylinder -->
+      <bpmndi:BPMNShape id="Shape_DSR_Projects" bpmnElement="DSR_Projects">
+        <omgdc:Bounds x="450" y="655" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="438" y="712" width="74" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- pomodoro_sessions cylinder -->
+      <bpmndi:BPMNShape id="Shape_DSR_Pomodoro_ETA" bpmnElement="DSR_Pomodoro_ETA">
+        <omgdc:Bounds x="540" y="655" width="50" height="50"/>
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="516" y="712" width="98" height="14"/>
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNEdge id="Edge_SF_ETA1" bpmnElement="SF_ETA1">
+        <omgdi:waypoint x="298" y="590"/>
+        <omgdi:waypoint x="360" y="590"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_ETA2" bpmnElement="SF_ETA2">
+        <omgdi:waypoint x="600" y="590"/>
+        <omgdi:waypoint x="660" y="590"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_SF_ETA3" bpmnElement="SF_ETA3">
+        <omgdi:waypoint x="900" y="590"/>
+        <omgdi:waypoint x="962" y="590"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_DIA_ETA_Tasks" bpmnElement="DIA_ETA_Tasks">
+        <omgdi:waypoint x="385" y="655"/>
+        <omgdi:waypoint x="420" y="630"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_DIA_ETA_Projects" bpmnElement="DIA_ETA_Projects">
+        <omgdi:waypoint x="475" y="655"/>
+        <omgdi:waypoint x="475" y="630"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_DIA_ETA_Pomodoro" bpmnElement="DIA_ETA_Pomodoro">
+        <omgdi:waypoint x="565" y="655"/>
+        <omgdi:waypoint x="530" y="630"/>
+      </bpmndi:BPMNEdge>
+
+      <!-- ── Message flows: делегирование ───────────────────────── -->
+      <bpmndi:BPMNEdge id="Edge_MF_Fetch_TC" bpmnElement="MF_Fetch_TC">
+        <omgdi:waypoint x="470" y="210"/>
+        <omgdi:waypoint x="470" y="330"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_Fetch_ETA" bpmnElement="MF_Fetch_ETA">
+        <omgdi:waypoint x="490" y="210"/>
+        <omgdi:waypoint x="490" y="550"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_Format_TC" bpmnElement="MF_Format_TC">
+        <omgdi:waypoint x="770" y="210"/>
+        <omgdi:waypoint x="770" y="330"/>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Edge_MF_Format_ETA" bpmnElement="MF_Format_ETA">
+        <omgdi:waypoint x="790" y="210"/>
+        <omgdi:waypoint x="790" y="550"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+
+</definitions>
