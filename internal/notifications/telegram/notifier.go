@@ -6,6 +6,7 @@ import (
 )
 
 type NotificationObserver interface {
+	// ID() string
 	Notify(r *domain.Reminder) error
 }
 
@@ -26,6 +27,16 @@ func (c *ReminderCoordinator) SetSender(sender notifications.MessageSender) {
 func (c *ReminderCoordinator) Register(o NotificationObserver) {
 	c.observers = append(c.observers, o)
 }
+
+// func (c *ReminderCoordinator) Unregister(o NotificationObserver) {
+// 	observers = []NotificationObserver{}
+// 	for _, r := range c.observers {
+// 		if r.ID() != o.ID() {
+// 			observers = append(observers, r)
+// 		}
+// 	}
+// 	c.observers = observers
+// }
 
 func (c *ReminderCoordinator) IsConfigured() bool {
 	return c.sender != nil && c.sender.IsConfigured()
