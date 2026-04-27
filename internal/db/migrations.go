@@ -31,16 +31,17 @@ func RunMigrations(db *sql.DB) error {
 	);
 
 	CREATE TABLE IF NOT EXISTS tasks (
-		id         INTEGER  PRIMARY KEY AUTOINCREMENT,
-		user_id    INTEGER  NOT NULL REFERENCES users(id),
-		project_id INTEGER  REFERENCES projects(id),
-		tag_id     INTEGER  REFERENCES tags(id),
-		content    TEXT     NOT NULL,
-		status     TEXT     NOT NULL DEFAULT 'TODO',
-		priority   TEXT     NOT NULL DEFAULT 'MEDIUM',
-		due_date   DATETIME,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		id           INTEGER  PRIMARY KEY AUTOINCREMENT,
+		user_id      INTEGER  NOT NULL REFERENCES users(id),
+		project_id   INTEGER  REFERENCES projects(id),
+		tag_id       INTEGER  REFERENCES tags(id),
+		content      TEXT     NOT NULL,
+		status       TEXT     NOT NULL DEFAULT 'TODO',
+		priority     TEXT     NOT NULL DEFAULT 'MEDIUM',
+		story_points INTEGER  NOT NULL DEFAULT 0,
+		due_date     DATETIME,
+		created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 
 	CREATE TABLE IF NOT EXISTS notes (
@@ -78,6 +79,10 @@ func RunMigrations(db *sql.DB) error {
 		created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 	`
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	// Idempotent: add story_points to existing task tables created before this migration.
+	_, _ = db.Exec(`ALTER TABLE tasks ADD COLUMN story_points INTEGER NOT NULL DEFAULT 0`)
+	return nil
 }

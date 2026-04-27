@@ -48,3 +48,19 @@ func (d *OverdueDecorator) Render(t *Task) string {
 	}
 	return s
 }
+
+type StoryPointsDecorator struct {
+	wrapped Renderer
+}
+
+func NewStoryPointsDecorator(r Renderer) *StoryPointsDecorator {
+	return &StoryPointsDecorator{wrapped: r}
+}
+
+func (d *StoryPointsDecorator) Render(t *Task) string {
+	s := d.wrapped.Render(t)
+	if t.StoryPoints > 0 {
+		s += fmt.Sprintf(" [%dsp]", t.StoryPoints)
+	}
+	return s
+}

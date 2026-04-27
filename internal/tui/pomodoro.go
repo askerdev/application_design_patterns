@@ -6,7 +6,9 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
@@ -18,6 +20,18 @@ type tickMsg time.Time
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+type adviceReadyMsg struct {
+	text string
+	err  error
+}
+
+func generateAdviceCmd(svc domain.AdvisorService, userID int64, projectID int64) tea.Cmd {
+	return func() tea.Msg {
+		text, err := svc.Advise(userID, projectID)
+		return adviceReadyMsg{text: text, err: err}
+	}
 }
 
 type sessionItem struct {
@@ -45,6 +59,10 @@ type pomodoroModel struct {
 	fDur      *string
 	fProject  *string
 
+	spinner       spinner.Model
+	adviceLoading bool
+	advice        string
+
 	svcs   Services
 	user   *domain.User
 	status string
@@ -56,11 +74,17 @@ func newPomodoroModel(svcs Services, user *domain.User) pomodoroModel {
 	l := list.New(nil, list.NewDefaultDelegate(), 0, 0)
 	l.Title = "Pomodoro"
 	l.Styles.Title = titleStyle
+
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return pomodoroModel{
 		svcs:     svcs,
 		user:     user,
 		list:     l,
 		progress: progress.New(progress.WithDefaultGradient()),
+		spinner:  sp,
 	}
 }
 
@@ -73,6 +97,31 @@ type pomodoroLoadMsg struct{}
 func (m pomodoroModel) Init() tea.Cmd { return m.reload() }
 
 func (m pomodoroModel) Update(msg tea.Msg) (pomodoroModel, tea.Cmd) {
+	// adviceReadyMsg handled first, regardless of any other state.
+	if advice, ok := msg.(adviceReadyMsg); ok {
+		m.adviceLoading = false
+		if advice.err != nil {
+			m.advice = errorStyle.Render("Советник: " + advice.err.Error())
+		} else {
+			rendered, err := glamour.Render(advice.text, "dark")
+			if err != nil {
+				m.advice = advice.text
+			} else {
+				m.advice = rendered
+			}
+		}
+		return m, nil
+	}
+
+	// Spinner tick is self-contained — return early, doesn't affect other handlers.
+	if m.adviceLoading {
+		if _, ok := msg.(spinner.TickMsg); ok {
+			var spinCmd tea.Cmd
+			m.spinner, spinCmd = m.spinner.Update(msg)
+			return m, spinCmd
+		}
+	}
+
 	if m.form != nil {
 		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
 			m.form = nil
@@ -210,10 +259,12 @@ func (m *pomodoroModel) startSession() tea.Cmd {
 		RemainingTime: dur * 60,
 		State:         domain.SessionStateIdle,
 	}
+	var focusProjectID int64
 	if m.fProject != nil {
 		var id int64
 		fmt.Sscanf(*m.fProject, "%d", &id)
 		session.ProjectID = &id
+		focusProjectID = id
 	}
 	if err := m.svcs.Pomodoro.Create(session); err != nil {
 		m.status = errorStyle.Render("Error: " + err.Error())
@@ -228,7 +279,14 @@ func (m *pomodoroModel) startSession() tea.Cmd {
 
 	m.machine = machine
 	m.session = session
-	return tickCmd()
+	m.advice = ""
+
+	cmds := []tea.Cmd{tickCmd()}
+	if m.svcs.Advisor != nil {
+		m.adviceLoading = true
+		cmds = append(cmds, m.spinner.Tick, generateAdviceCmd(m.svcs.Advisor, m.user.ID, focusProjectID))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *pomodoroModel) syncSession() {
@@ -261,9 +319,23 @@ func (m pomodoroModel) View() string {
 			fmt.Sprintf("  %s   %02d:%02d\n\n", m.machine.StateName(), mins, secs),
 		)
 		help := statusBarStyle.Render("p pause  r resume  c complete  esc/x cancel")
+
+		adviceBlock := ""
+		if m.adviceLoading {
+			adviceBlock = "\n" + m.spinner.View() + " Анализирую задачи…"
+		} else if m.advice != "" {
+			adviceStyle := lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("63")).
+				Padding(0, 1).
+				MarginTop(1).
+				Width(m.width - 12)
+			adviceBlock = "\n" + adviceStyle.Render("💡 Совет\n\n"+m.advice)
+		}
+
 		return lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.NewStyle().Padding(2, 4).Render(
-				timerStr+m.progress.View(),
+				timerStr+m.progress.View()+adviceBlock,
 			),
 			help,
 		)

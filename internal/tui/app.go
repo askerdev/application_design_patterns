@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -30,6 +31,7 @@ type Services struct {
 	Tags      domain.TagService
 	Pomodoro  pomodorosvc.Service
 	Stats     domain.StatsService
+	Advisor   domain.AdvisorService
 }
 
 type model struct {
@@ -94,6 +96,18 @@ func (m model) tabBar() string {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if _, ok := msg.(tickMsg); ok {
+		updated, cmd := m.pomodoro.Update(msg)
+		m.pomodoro = updated
+		return m, cmd
+	}
+
+	if _, ok := msg.(spinner.TickMsg); ok {
+		updated, cmd := m.pomodoro.Update(msg)
+		m.pomodoro = updated
+		return m, cmd
+	}
+
+	if _, ok := msg.(adviceReadyMsg); ok {
 		updated, cmd := m.pomodoro.Update(msg)
 		m.pomodoro = updated
 		return m, cmd
@@ -199,11 +213,7 @@ func (m model) reloadActive() tea.Cmd {
 	case tabTags:
 		return m.tags.reload()
 	case tabPomodoro:
-		cmd := m.pomodoro.reload()
-		if m.pomodoro.machine != nil && m.pomodoro.machine.StateName() == "RUNNING" {
-			cmd = tea.Batch(cmd, tickCmd())
-		}
-		return cmd
+		return m.pomodoro.reload()
 	case tabStats:
 		return m.stats.reload()
 	}

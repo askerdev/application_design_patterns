@@ -4,18 +4,26 @@ import (
 	"fmt"
 	"log"
 	"os"
-
-	"github.com/spf13/cobra"
-
 	"taskflow/internal/app"
 	"taskflow/internal/config"
 	"taskflow/internal/db"
 	domain "taskflow/internal/domain"
 	tgnot "taskflow/internal/notifications/telegram"
 	pomodorosvc "taskflow/internal/pomodoro"
+	ollamarepo "taskflow/internal/repository/ollama"
 	sqliterepo "taskflow/internal/repository/sqlite"
 	"taskflow/internal/tui"
+
+	"github.com/spf13/cobra"
 )
+
+func mustOllama() domain.LLMGenerator {
+	gen, err := ollamarepo.NewOllamaGenerator("gemma4")
+	if err != nil {
+		log.Fatal("ollama init:", err)
+	}
+	return gen
+}
 
 func main() {
 	cfg := config.Instance()
@@ -49,6 +57,7 @@ func main() {
 		Tags:      domain.NewTagService(tagRepo),
 		Pomodoro:  pomodorosvc.NewService(pomodoroRepo),
 		Stats:     domain.NewStatsService(taskRepo, projectRepo, pomodoroRepo),
+		Advisor:   domain.NewAdvisorService(taskRepo, projectRepo, pomodoroRepo, mustOllama()),
 	}
 
 	user, err := userRepo.GetFirst()
@@ -155,7 +164,7 @@ func main() {
 			if err := db.RunSeed(conn); err != nil {
 				return err
 			}
-			fmt.Println("Seeded: 4 projects, 4 tags, 10 tasks, 4 notes, 4 reminders, 5 pomodoro sessions")
+			fmt.Println("Seeded: 5 projects, 4 tags, 24 tasks (with SP+deadlines), 4 notes, 4 reminders, 9 pomodoro sessions")
 			return nil
 		},
 	}

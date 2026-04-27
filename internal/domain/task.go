@@ -19,16 +19,17 @@ const (
 )
 
 type Task struct {
-	ID        int64
-	UserID    int64
-	ProjectID *int64
-	TagID     *int64
-	Content   string
-	Status    TaskStatus
-	Priority  Priority
-	DueDate   *time.Time
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          int64
+	UserID      int64
+	ProjectID   *int64
+	TagID       *int64
+	Content     string
+	Status      TaskStatus
+	Priority    Priority
+	StoryPoints int
+	DueDate     *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 func (t *Task) IsOverdue() bool {

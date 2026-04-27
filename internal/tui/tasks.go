@@ -31,7 +31,7 @@ func (i taskItem) Title() string {
 }
 
 func (i taskItem) Description() string {
-	r := domain.NewOverdueDecorator(domain.NewPriorityDecorator(&domain.BaseRenderer{}))
+	r := domain.NewOverdueDecorator(domain.NewStoryPointsDecorator(domain.NewPriorityDecorator(&domain.BaseRenderer{})))
 	s := r.Render(i.task)
 	if i.projectName != "" {
 		s += " · " + i.projectName
@@ -68,6 +68,7 @@ type tasksModel struct {
 	fProject  *string
 	fTag      *string
 	fDueDate  *string
+	fSP       *string
 
 	svcs      Services
 	user      *domain.User
@@ -166,8 +167,8 @@ func (m tasksModel) Update(msg tea.Msg) (tasksModel, tea.Cmd) {
 					m.status = errorStyle.Render("Create a project first.")
 					return m, nil
 				}
-				content, priority, proj, tag, due := "", "MEDIUM", fmt.Sprintf("%d", projects[0].ID), "", ""
-				m.fContent, m.fPriority, m.fProject, m.fTag, m.fDueDate = &content, &priority, &proj, &tag, &due
+				content, priority, proj, tag, due, sp := "", "MEDIUM", fmt.Sprintf("%d", projects[0].ID), "", "", "0"
+				m.fContent, m.fPriority, m.fProject, m.fTag, m.fDueDate, m.fSP = &content, &priority, &proj, &tag, &due, &sp
 				m.form = m.buildAddForm(projects)
 				return m, m.form.Init()
 			case "d":
@@ -259,6 +260,18 @@ func (m *tasksModel) buildAddForm(projects []*domain.Project) *huh.Form {
 				).
 				Value(m.fPriority),
 			huh.NewSelect[string]().
+				Title("Story Points").
+				Options(
+					huh.NewOption("0 (не оценено)", "0"),
+					huh.NewOption("1", "1"),
+					huh.NewOption("2", "2"),
+					huh.NewOption("3", "3"),
+					huh.NewOption("5", "5"),
+					huh.NewOption("8", "8"),
+					huh.NewOption("13", "13"),
+				).
+				Value(m.fSP),
+			huh.NewSelect[string]().
 				Title("Project").
 				Options(projOpts...).
 				Value(m.fProject),
@@ -290,8 +303,13 @@ func (m *tasksModel) saveTask() error {
 			dueDate = &t
 		}
 	}
+	sp := 0
+	if m.fSP != nil {
+		fmt.Sscanf(*m.fSP, "%d", &sp)
+	}
 	factory := domain.NewEntityFactory()
 	t := factory.CreateTask(m.user.ID, *m.fContent, domain.Priority(*m.fPriority), &projID, tagID, dueDate)
+	t.StoryPoints = sp
 	if err := m.svcs.Tasks.Create(t); err != nil {
 		return err
 	}
