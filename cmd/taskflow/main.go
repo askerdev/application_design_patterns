@@ -13,6 +13,7 @@ import (
 	ollamarepo "taskflow/internal/repository/ollama"
 	sqliterepo "taskflow/internal/repository/sqlite"
 	"taskflow/internal/tui"
+	"taskflow/internal/web"
 
 	"github.com/spf13/cobra"
 )
@@ -43,21 +44,26 @@ func main() {
 	tgCoordinator := tgnot.NewReminderCoordinator(reminderRepo)
 	tgCoordinator.SetSender(tgSender)
 	tgCoordinator.Register(tgnot.NewTelegramNotifier(tgSender))
+	tgCoordinator.SetEnabled(cfg.NotificationsEnabled)
 
 	cachedTaskRepo := domain.NewCachingTaskRepo(taskRepo)
 	taskSvc := domain.NewTaskService(cachedTaskRepo)
 	projectSvc := domain.NewProjectService(projectRepo)
 	noteSvc := domain.NewNoteService(noteRepo)
 
+	llm := mustOllama()
+	ganttPlanner := domain.NewGanttPlanner(taskRepo, projectRepo, llm)
+
 	svcs := tui.Services{
-		Tasks:     taskSvc,
-		Projects:  projectSvc,
-		Notes:     noteSvc,
-		Reminders: domain.NewReminderService(reminderRepo, tgCoordinator),
-		Tags:      domain.NewTagService(tagRepo),
-		Pomodoro:  pomodorosvc.NewService(pomodoroRepo),
-		Stats:     domain.NewStatsService(taskRepo, projectRepo, pomodoroRepo),
-		Advisor:   domain.NewAdvisorService(taskRepo, projectRepo, pomodoroRepo, mustOllama()),
+		Tasks:        taskSvc,
+		Projects:     projectSvc,
+		Notes:        noteSvc,
+		Reminders:    domain.NewReminderService(reminderRepo, tgCoordinator),
+		Tags:         domain.NewTagService(tagRepo),
+		Pomodoro:     pomodorosvc.NewService(pomodoroRepo),
+		Stats:        domain.NewStatsService(taskRepo, projectRepo, pomodoroRepo),
+		Advisor:      domain.NewAdvisorService(taskRepo, projectRepo, pomodoroRepo, llm),
+		GanttPlanner: ganttPlanner,
 	}
 
 	user, err := userRepo.GetFirst()
@@ -68,13 +74,15 @@ func main() {
 		}
 	}
 
+	ganttServer := web.NewGanttServer(ganttPlanner, projectSvc, ":8080", user.ID)
+
 	facade := app.NewAppFacade(taskSvc, projectSvc, noteSvc, user)
 
 	rootCmd := &cobra.Command{
 		Use:   "taskflow",
 		Short: "TaskFlow — task manager with TUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := tui.New(svcs, user).Run()
+			_, err := tui.New(svcs, user, tgCoordinator, ganttServer).Run()
 			return err
 		},
 	}
@@ -164,7 +172,7 @@ func main() {
 			if err := db.RunSeed(conn); err != nil {
 				return err
 			}
-			fmt.Println("Seeded: 5 projects, 4 tags, 24 tasks (with SP+deadlines), 4 notes, 4 reminders, 9 pomodoro sessions")
+			fmt.Println("Seeded: 7 projects (incl. 🚀 Запуск SaaS MVP — demo), 4 tags, ~55 tasks, notes, reminders, pomodoro sessions")
 			return nil
 		},
 	}

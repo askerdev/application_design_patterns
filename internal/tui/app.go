@@ -9,9 +9,10 @@ import (
 
 	domain "taskflow/internal/domain"
 	pomodorosvc "taskflow/internal/pomodoro"
+	"taskflow/internal/web"
 )
 
-var tabNames = []string{"Tasks", "Projects", "Notes", "Reminders", "Tags", "Pomodoro", "Stats"}
+var tabNames = []string{"Tasks", "Projects", "Notes", "Reminders", "Tags", "Pomodoro", "Stats", "Gantt", "Settings"}
 
 const (
 	tabTasks = iota
@@ -21,17 +22,20 @@ const (
 	tabTags
 	tabPomodoro
 	tabStats
+	tabGantt
+	tabSettings
 )
 
 type Services struct {
-	Tasks     domain.TaskService
-	Projects  domain.ProjectService
-	Notes     domain.NoteService
-	Reminders domain.ReminderService
-	Tags      domain.TagService
-	Pomodoro  pomodorosvc.Service
-	Stats     domain.StatsService
-	Advisor   domain.AdvisorService
+	Tasks        domain.TaskService
+	Projects     domain.ProjectService
+	Notes        domain.NoteService
+	Reminders    domain.ReminderService
+	Tags         domain.TagService
+	Pomodoro     pomodorosvc.Service
+	Stats        domain.StatsService
+	Advisor      domain.AdvisorService
+	GanttPlanner domain.GanttPlanner
 }
 
 type model struct {
@@ -43,13 +47,15 @@ type model struct {
 	tags      tagsModel
 	pomodoro  pomodoroModel
 	stats     statsModel
+	gantt     ganttModel
+	settings  settingsModel
 	width     int
 	height    int
 }
 
 const tabBarHeight = 2
 
-func newModel(svcs Services, user *domain.User) model {
+func newModel(svcs Services, user *domain.User, toggler NotificationToggler, server *web.GanttServer) model {
 	return model{
 		activeTab: tabTasks,
 		tasks:     newTasksModel(svcs, user),
@@ -59,6 +65,8 @@ func newModel(svcs Services, user *domain.User) model {
 		tags:      newTagsModel(svcs, user),
 		pomodoro:  newPomodoroModel(svcs, user),
 		stats:     newStatsModel(svcs, user),
+		gantt:     newGanttModel(svcs, user, server),
+		settings:  newSettingsModel(svcs, user, toggler),
 	}
 }
 
@@ -71,6 +79,7 @@ func (m model) Init() tea.Cmd {
 		m.tags.reload(),
 		m.pomodoro.reload(),
 		m.stats.reload(),
+		m.gantt.reload(),
 		reminderTickCmd(),
 	)
 }
@@ -102,9 +111,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if _, ok := msg.(spinner.TickMsg); ok {
-		updated, cmd := m.pomodoro.Update(msg)
-		m.pomodoro = updated
-		return m, cmd
+		// Спиннер используется и в pomodoro, и в gantt — диспатчим в активную вкладку.
+		switch m.activeTab {
+		case tabGantt:
+			updated, cmd := m.gantt.Update(msg)
+			m.gantt = updated
+			return m, cmd
+		default:
+			updated, cmd := m.pomodoro.Update(msg)
+			m.pomodoro = updated
+			return m, cmd
+		}
 	}
 
 	if _, ok := msg.(adviceReadyMsg); ok {
@@ -119,6 +136,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if _, ok := msg.(ganttPlanReadyMsg); ok {
+		updated, cmd := m.gantt.Update(msg)
+		m.gantt = updated
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -130,6 +153,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tags = m.tags.setSize(msg.Width, contentH)
 		m.pomodoro = m.pomodoro.setSize(msg.Width, contentH)
 		m.stats = m.stats.setSize(msg.Width, contentH)
+		m.gantt = m.gantt.setSize(msg.Width, contentH)
+		m.settings = m.settings.setSize(msg.Width, contentH)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -178,6 +203,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		updated, cmd := m.stats.Update(msg)
 		m.stats = updated
 		return m, cmd
+	case tabGantt:
+		updated, cmd := m.gantt.Update(msg)
+		m.gantt = updated
+		return m, cmd
+	case tabSettings:
+		updated, cmd := m.settings.Update(msg)
+		m.settings = updated
+		return m, cmd
 	}
 	return m, nil
 }
@@ -216,6 +249,10 @@ func (m model) reloadActive() tea.Cmd {
 		return m.pomodoro.reload()
 	case tabStats:
 		return m.stats.reload()
+	case tabGantt:
+		return m.gantt.reload()
+	case tabSettings:
+		return m.settings.reload()
 	}
 	return nil
 }
@@ -238,10 +275,16 @@ func (m model) View() string {
 		content = m.pomodoro.View()
 	case tabStats:
 		content = m.stats.View()
+	case tabGantt:
+		content = m.gantt.View()
+	case tabSettings:
+		content = m.settings.View()
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, bar, content)
 }
 
-func New(svcs Services, user *domain.User) *tea.Program {
-	return tea.NewProgram(newModel(svcs, user), tea.WithAltScreen())
+// New создаёт TUI программу. toggler — для переключения уведомлений на лету,
+// server — singleton HTTP сервер для диаграммы Ганта.
+func New(svcs Services, user *domain.User, toggler NotificationToggler, server *web.GanttServer) *tea.Program {
+	return tea.NewProgram(newModel(svcs, user, toggler, server), tea.WithAltScreen())
 }

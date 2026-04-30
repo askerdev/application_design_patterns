@@ -14,14 +14,25 @@ type ReminderCoordinator struct {
 	observers []NotificationObserver
 	repo      domain.ReminderRepository
 	sender    notifications.MessageSender
+	enabled   bool
 }
 
 func NewReminderCoordinator(repo domain.ReminderRepository) *ReminderCoordinator {
-	return &ReminderCoordinator{repo: repo}
+	return &ReminderCoordinator{repo: repo, enabled: true}
 }
 
 func (c *ReminderCoordinator) SetSender(sender notifications.MessageSender) {
 	c.sender = sender
+}
+
+// SetEnabled управляет глобальным флагом отправки уведомлений.
+// Когда disabled, CheckAndNotify ничего не делает (но всё равно может пометить — см. ниже).
+func (c *ReminderCoordinator) SetEnabled(enabled bool) {
+	c.enabled = enabled
+}
+
+func (c *ReminderCoordinator) IsEnabled() bool {
+	return c.enabled
 }
 
 func (c *ReminderCoordinator) Register(o NotificationObserver) {
@@ -43,6 +54,9 @@ func (c *ReminderCoordinator) IsConfigured() bool {
 }
 
 func (c *ReminderCoordinator) CheckAndNotify() error {
+	if !c.enabled {
+		return nil
+	}
 	pending, err := c.repo.GetPending()
 	if err != nil {
 		return err
