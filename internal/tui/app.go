@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"taskflow/internal/config"
 	domain "taskflow/internal/domain"
 	pomodorosvc "taskflow/internal/pomodoro"
 	"taskflow/internal/web"
@@ -286,5 +287,8 @@ func (m model) View() string {
 // New создаёт TUI программу. toggler — для переключения уведомлений на лету,
 // server — singleton HTTP сервер для диаграммы Ганта.
 func New(svcs Services, user *domain.User, toggler NotificationToggler, server *web.GanttServer) *tea.Program {
+	cfg := config.Instance()
+	lipgloss.SetHasDarkBackground(cfg.Theme == "dark")
+	applyTerminalTheme(cfg.Theme == "dark")
 	return tea.NewProgram(newModel(svcs, user, toggler, server), tea.WithAltScreen())
 }
