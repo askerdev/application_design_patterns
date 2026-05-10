@@ -12,8 +12,6 @@ import (
 	domain "taskflow/internal/domain"
 )
 
-// NotificationToggler — то, что Settings вызывает при переключении уведомлений.
-// Реализуется ReminderCoordinator-ом (метод SetEnabled).
 type NotificationToggler interface {
 	SetEnabled(bool)
 	IsEnabled() bool
@@ -25,12 +23,13 @@ type settingsModel struct {
 	user    *domain.User
 	toggler NotificationToggler
 	status  string
+	cursor  int
 	width   int
 	height  int
 }
 
 func newSettingsModel(svcs Services, user *domain.User, toggler NotificationToggler) settingsModel {
-	return settingsModel{svcs: svcs, user: user, toggler: toggler}
+	return settingsModel{svcs: svcs, user: user, toggler: toggler, cursor: 0}
 }
 
 func (m settingsModel) reload() tea.Cmd {
@@ -41,10 +40,6 @@ type settingsLoadMsg struct{}
 
 func (m settingsModel) Init() tea.Cmd { return nil }
 
-// form у settings нет — но интерфейс activeHasForm ожидает его наличие у других экранов.
-// Поле не нужно, но чтобы быть совместимыми с паттерном, оставляем nil.
-// (В app.go проверка идёт явно по типу.)
-
 func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case settingsLoadMsg:
@@ -53,8 +48,20 @@ func (m settingsModel) Update(msg tea.Msg) (settingsModel, tea.Cmd) {
 		switch msg.String() {
 		case "q":
 			return m, tea.Quit
-		case "t", " ", "enter":
-			return m.toggleNotifications()
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < 1 {
+				m.cursor++
+			}
+		case " ", "enter":
+			if m.cursor == 0 {
+				return m.toggleNotifications()
+			} else {
+				return m.toggleTheme()
+			}
 		}
 	}
 	return m, nil
@@ -65,7 +72,6 @@ func (m settingsModel) toggleNotifications() (settingsModel, tea.Cmd) {
 	cfg.NotificationsEnabled = !cfg.NotificationsEnabled
 	if err := config.Save(cfg); err != nil {
 		m.status = errorStyle.Render("Ошибка сохранения: " + err.Error())
-		// откат
 		cfg.NotificationsEnabled = !cfg.NotificationsEnabled
 		return m, nil
 	}
@@ -78,6 +84,32 @@ func (m settingsModel) toggleNotifications() (settingsModel, tea.Cmd) {
 		m.status = "🔕 Telegram-уведомления выключены."
 	}
 	return m, nil
+}
+
+func (m settingsModel) toggleTheme() (settingsModel, tea.Cmd) {
+	cfg := config.Instance()
+	if cfg.Theme == "dark" {
+		cfg.Theme = "light"
+	} else {
+		cfg.Theme = "dark"
+	}
+	if err := config.Save(cfg); err != nil {
+		m.status = errorStyle.Render("Ошибка сохранения: " + err.Error())
+		if cfg.Theme == "dark" {
+			cfg.Theme = "light"
+		} else {
+			cfg.Theme = "dark"
+		}
+		return m, nil
+	}
+	lipgloss.SetHasDarkBackground(cfg.Theme == "dark")
+	applyTerminalTheme(cfg.Theme == "dark")
+	if cfg.Theme == "dark" {
+		m.status = "🌙 Тёмная тема включена."
+	} else {
+		m.status = "☀️ Светлая тема включена."
+	}
+	return m, tea.WindowSize()
 }
 
 func (m settingsModel) View() string {
@@ -99,15 +131,31 @@ func (m settingsModel) View() string {
 		stateStyle = lipgloss.NewStyle().Foreground(colorSuccess).Bold(true)
 	}
 
+	themeLabel := "🌙 ТЁМНАЯ"
+	themeStyle := lipgloss.NewStyle().Foreground(colorMuted).Bold(true)
+	if cfg.Theme == "light" {
+		themeLabel = "☀️ СВЕТЛАЯ"
+		themeStyle = lipgloss.NewStyle().Foreground(colorSuccess).Bold(true)
+	}
+
 	configured := m.toggler != nil && m.toggler.IsConfigured()
 	configuredView := "❌ нет (укажите token и chat_id)"
 	if configured {
 		configuredView = "✅ да"
 	}
 
+	cursorNotif := "  "
+	cursorTheme := "  "
+	if m.cursor == 0 {
+		cursorNotif = "> "
+	} else if m.cursor == 1 {
+		cursorTheme = "> "
+	}
+
 	body := strings.Builder{}
-	body.WriteString(titleStyle.Render("Settings — Уведомления") + "\n\n")
-	body.WriteString("Telegram уведомления:  " + stateStyle.Render(stateLabel) + "\n")
+	body.WriteString(titleStyle.Render("Settings — Настройки") + "\n\n")
+	body.WriteString(cursorNotif + "Telegram уведомления:  " + stateStyle.Render(stateLabel) + "\n")
+	body.WriteString(cursorTheme + "Тема интерфейса:       " + themeStyle.Render(themeLabel) + "\n\n")
 	body.WriteString(fmt.Sprintf("Подключение настроено: %s\n\n", configuredView))
 	body.WriteString(fmt.Sprintf("Bot token : %s\n", tokenView))
 	body.WriteString(fmt.Sprintf("Chat ID   : %s\n", chatView))
@@ -121,7 +169,7 @@ func (m settingsModel) View() string {
 		body.WriteString("\n" + m.status)
 	}
 
-	help := statusBarStyle.Render("t/space/enter toggle  tab switch  q quit")
+	help := statusBarStyle.Render("↑/↓ move  space/enter toggle  tab switch  q quit")
 	return lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.NewStyle().Padding(1, 2).Render(body.String()),
 		help,

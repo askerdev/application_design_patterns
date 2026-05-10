@@ -14,6 +14,7 @@ type Config struct {
 	TelegramBotToken     string `json:"telegram_bot_token"`
 	TelegramChatID       int64  `json:"telegram_chat_id"`
 	NotificationsEnabled bool   `json:"notifications_enabled"`
+	Theme                string `json:"theme"`
 	DBPath               string `json:"-"`
 }
 
@@ -61,6 +62,10 @@ func Instance() *Config {
 			dbPath = "taskflow.db"
 		}
 		fc.DBPath = dbPath
+
+		if fc.Theme == "" {
+			fc.Theme = "dark"
+		}
 
 		instance = &fc
 	})
