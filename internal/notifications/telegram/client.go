@@ -31,6 +31,21 @@ type sendMessageRequest struct {
 	Text   string `json:"text"`
 }
 
+type Update struct {
+	UpdateID int64 `json:"update_id"`
+	Message  *struct {
+		Text string `json:"text"`
+		Chat struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+	} `json:"message"`
+}
+
+type getUpdatesResponse struct {
+	OK     bool     `json:"ok"`
+	Result []Update `json:"result"`
+}
+
 func (c *Client) SendMessage(text string) error {
 	if !c.IsConfigured() {
 		return nil
@@ -49,4 +64,25 @@ func (c *Client) SendMessage(text string) error {
 		return fmt.Errorf("telegram API returned %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (c *Client) GetUpdates(offset int64) ([]Update, error) {
+	if !c.IsConfigured() {
+		return nil, nil
+	}
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=30", c.token, offset)
+	resp, err := c.http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var res getUpdatesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+	if !res.OK {
+		return nil, fmt.Errorf("telegram API error")
+	}
+	return res.Result, nil
 }
