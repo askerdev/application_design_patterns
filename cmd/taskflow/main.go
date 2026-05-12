@@ -78,6 +78,11 @@ func main() {
 
 	facade := app.NewAppFacade(taskSvc, projectSvc, noteSvc, user)
 
+	if tgClient.IsConfigured() {
+		botListener := tgnot.NewBotListener(tgClient, facade, cfg.TelegramChatID)
+		go botListener.Start()
+	}
+
 	rootCmd := &cobra.Command{
 		Use:   "taskflow",
 		Short: "TaskFlow — task manager with TUI",
